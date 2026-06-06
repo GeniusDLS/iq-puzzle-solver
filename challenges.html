@@ -67,11 +67,15 @@
   .status{margin-top:14px; font-size:14px; min-height:22px}
   .status.ok{color:var(--ok)} .status.err{color:var(--err)} .status.info{color:var(--muted)} .status.hint{color:var(--hint)}
   .counter{font-size:12px;color:var(--muted);margin-top:6px}
+  .timer{font-size:15px;font-weight:700;color:var(--text);margin-top:8px}
   .hint{font-size:12px;color:var(--muted);margin-top:10px;max-width:360px;line-height:1.5}
+  #toast{position:fixed; left:50%; bottom:28px; transform:translateX(-50%);
+    background:#0c0f1c; border:1px solid var(--line); color:var(--text); padding:10px 16px;
+    border-radius:10px; font-size:13px; opacity:0; transition:opacity .25s; pointer-events:none; z-index:9}
 </style>
 </head>
 <body>
-  <h1>Завдання з підказками <span class="ver">v1.3 · 2026-06-06</span></h1>
+  <h1>Завдання з підказками <span class="ver">v1.4 · 2026-06-06</span></h1>
   <div class="sub">Оберіть рівень → доставте відсутні фігури. Застрягли — тисніть «Підказка». <a class="navlink" href="index.html">← На головну (вільний solver)</a></div>
 
   <div class="layout">
@@ -83,9 +87,12 @@
         <button id="hintBtn" class="hintbtn">Підказка</button>
         <button id="resetBtn" class="secondary">Скинути мої ходи</button>
         <button id="revealBtn" class="secondary">Показати розв'язок</button>
+        <button id="shareBtn" class="secondary">🔗 Поділитися</button>
       </div>
+      <div id="timer" class="timer">⏱ 0:00</div>
       <div id="status" class="status info"></div>
       <div id="counter" class="counter"></div>
+      <div id="record" class="counter"></div>
     </div>
 
     <div class="card" style="max-width:420px">
@@ -100,6 +107,7 @@
       </div>
     </div>
   </div>
+  <div id="toast"></div>
 
 <script type="text/plain" id="core">
 /* ===== IQ Puzzler solver core (DOM-free) ===== */
@@ -308,18 +316,42 @@ function solve(startOccupied, startUsed, model, limitNodes, skip){
   ];
   let level = 0;
 
-  let refByPiece = {};         // pieceId -> [cells] of the generated reference solution
-  let givenSet = new Set();    // pieces shown as the clue
-  let hintedSet = new Set();   // pieces revealed by hints (locked at reference position)
-  let playerCells = new Map(); // cell -> pieceId (manual)
+  let refByPiece = {};
+  let givenSet = new Set();
+  let hintedSet = new Set();
+  let playerCells = new Map();
   let activePiece = null, activeFace = 0;
-  let pendingHint = null;      // pieceId staged by a first hint click
+  let pendingHint = null;
   let hintsUsed = 0;
   let solved = false;
 
+  // --- seeded RNG (deterministic challenges, shareable via URL) ---
+  function hashSeed(s){ let h=2166136261>>>0; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); } return h>>>0; }
+  function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+  let rng = Math.random, curSeed = null;
+  function randSeedStr(){ return Math.random().toString(36).slice(2,8).toUpperCase(); }
+  function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(rng()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+
+  // --- timer + records (localStorage) ---
+  let startMs=0, timerInt=null;
+  const REC_KEY='iqp_records_v1';
+  function fmt(ms){ const s=Math.max(0,Math.floor(ms/1000)); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); }
+  function startTimer(){ stopTimer(); startMs=Date.now(); timerEl.textContent='⏱ 0:00'; timerInt=setInterval(()=>{ timerEl.textContent='⏱ '+fmt(Date.now()-startMs); },250); }
+  function stopTimer(){ if(timerInt){ clearInterval(timerInt); timerInt=null; } }
+  function loadRecs(){ try{ return JSON.parse(localStorage.getItem(REC_KEY))||{}; }catch(e){ return {}; } }
+  function saveRecs(r){ try{ localStorage.setItem(REC_KEY,JSON.stringify(r)); }catch(e){} }
+  function renderRecord(){
+    const r=loadRecs()[level];
+    recordEl.textContent = r
+      ? `🏆 ${LEVELS[level].name}: найкращий час ${fmt(r.bestMs)} · мін. підказок ${r.bestHints} · розв'язано ${r.count}`
+      : `🏆 ${LEVELS[level].name}: рекордів ще немає`;
+  }
+
   const boardEl=document.getElementById('board'), piecesEl=document.getElementById('pieces'),
         facesEl=document.getElementById('faces'), statusEl=document.getElementById('status'),
-        counterEl=document.getElementById('counter'), levelsEl=document.getElementById('levels');
+        counterEl=document.getElementById('counter'), levelsEl=document.getElementById('levels'),
+        timerEl=document.getElementById('timer'), recordEl=document.getElementById('record'),
+        toastEl=document.getElementById('toast');
 
   const cellEls=[];
   for(let i=0;i<NCELLS;i++){ const d=document.createElement('div'); d.className='cell';
@@ -330,7 +362,8 @@ function solve(startOccupied, startUsed, model, limitNodes, skip){
   function renderLevels(){ [...levelsEl.children].forEach((b,idx)=>b.className='lvl'+(idx===level?' active':'')); }
 
   function setStatus(m,k){ statusEl.className='status '+(k||'info'); statusEl.innerHTML=m; }
-  function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+  function toast(m){ toastEl.textContent=m; toastEl.style.opacity='1'; clearTimeout(toastEl._t); toastEl._t=setTimeout(()=>toastEl.style.opacity='0',1800); }
+  function updateUrl(){ const u=new URL(location.href); u.searchParams.set('level',level); u.searchParams.set('seed',curSeed); history.replaceState(null,'',u); }
 
   function buildLocked(){
     const m=new Map();
@@ -340,9 +373,11 @@ function solve(startOccupied, startUsed, model, limitNodes, skip){
   }
   function placeable(pid){ return !givenSet.has(pid)&&!hintedSet.has(pid); }
 
-  function newChallenge(){
+  function newChallenge(seed){
+    curSeed = seed || randSeedStr();
+    rng = mulberry32(hashSeed(curSeed+':'+level));
     const keep=LEVELS[level].keep;
-    const skip=Math.floor(Math.random()*40);
+    const skip=Math.floor(rng()*40);
     let res=solve(0n,new Set(),model,0,skip);
     if(!res.solved) res=solve(0n,new Set(),model,0,0);
     refByPiece={};
@@ -351,9 +386,9 @@ function solve(startOccupied, startUsed, model, limitNodes, skip){
     givenSet=new Set(ids.slice(0,keep));
     hintedSet=new Set(); playerCells=new Map(); pendingHint=null; hintsUsed=0; solved=false;
     activePiece=(PIECES.find(p=>!givenSet.has(p.id))||{}).id||null; activeFace=0;
-    renderLevels();
+    renderLevels(); renderRecord(); updateUrl(); startTimer();
     const toPlace=PIECES.length-keep;
-    setStatus(`Рівень: <b>${LEVELS[level].name}</b>. Треба поставити <b>${toPlace}</b> фігур.`,'info');
+    setStatus(`Рівень: <b>${LEVELS[level].name}</b> · код <b>${curSeed}</b>. Треба поставити <b>${toPlace}</b> фігур.`,'info');
     render();
   }
 
@@ -427,6 +462,15 @@ function solve(startOccupied, startUsed, model, limitNodes, skip){
     return shapeKey(normalize(cells.map(i=>[Math.floor(i/COLS),i%COLS])));
   }
 
+  function recordSolve(elapsed){
+    const recs=loadRecs(); const r=recs[level]||{bestMs:null,bestHints:null,count:0};
+    let newBest=false;
+    if(r.bestMs==null||elapsed<r.bestMs){ r.bestMs=elapsed; newBest=true; }
+    if(r.bestHints==null||hintsUsed<r.bestHints){ r.bestHints=hintsUsed; }
+    r.count=(r.count||0)+1; recs[level]=r; saveRecs(recs); renderRecord();
+    return newBest;
+  }
+
   function autoCheck(){
     const locked=buildLocked();
     if(locked.size+playerCells.size<NCELLS) return;
@@ -436,8 +480,11 @@ function solve(startOccupied, startUsed, model, limitNodes, skip){
       if(!SHAPE_KEYS[pid].has(playerShapeKey(pid))){
         setStatus('Поле повне, але форма однієї з ваших фігур не відповідає жодній її грані.','err'); return; }
     }
-    solved=true; pendingHint=null;
-    setStatus(`Розв'язано! 🎉  Підказок використано: ${hintsUsed}.`,'ok'); render();
+    solved=true; pendingHint=null; stopTimer();
+    const elapsed=Date.now()-startMs;
+    const nb=recordSolve(elapsed);
+    setStatus(`Розв'язано за ${fmt(elapsed)}! 🎉 Підказок: ${hintsUsed}.${nb?' 🏅 Новий рекорд часу!':''}`,'ok');
+    render();
   }
 
   function nextHintPiece(){
@@ -470,20 +517,31 @@ function solve(startOccupied, startUsed, model, limitNodes, skip){
   }
   function onReveal(){
     for(const p of PIECES) if(!givenSet.has(p.id)) hintedSet.add(p.id);
-    playerCells=new Map(); pendingHint=null; solved=true;
-    setStatus('Показано повний розв’язок.','info'); render();
+    playerCells=new Map(); pendingHint=null; solved=true; stopTimer();
+    setStatus('Показано повний розв’язок (без зарахування рекорду).','info'); render();
   }
   function onReset(){
     if(solved) return;
     playerCells=new Map(); pendingHint=null; setStatus('Ваші ходи скинуто.','info'); render();
   }
+  function onShare(){
+    updateUrl();
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(location.href).then(()=>toast('Посилання на це завдання скопійовано')).catch(()=>toast('Скопіюйте адресу з рядка браузера'));
+    } else toast('Скопіюйте адресу з рядка браузера');
+  }
 
-  document.getElementById('newBtn').addEventListener('click',newChallenge);
+  document.getElementById('newBtn').addEventListener('click',()=>newChallenge());
   document.getElementById('hintBtn').addEventListener('click',onHint);
   document.getElementById('revealBtn').addEventListener('click',onReveal);
   document.getElementById('resetBtn').addEventListener('click',onReset);
+  document.getElementById('shareBtn').addEventListener('click',onShare);
 
-  newChallenge();
+  // initial challenge: from URL (?level, ?seed) if present, else random
+  const params=new URLSearchParams(location.search);
+  const lv=parseInt(params.get('level'),10);
+  if(lv>=0&&lv<LEVELS.length) level=lv;
+  newChallenge(params.get('seed')||undefined);
 })();
 </script>
 </body>
