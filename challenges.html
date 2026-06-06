@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IQ Puzzler — Завдання з підказками</title>
+<style>
+  :root{
+    --bg:#0f1220; --panel:#181c2e; --panel2:#20253c; --line:#2c3350;
+    --text:#e8ecff; --muted:#97a0c4; --accent:#5b8cff; --ok:#34d27b; --err:#ff5d6c; --hint:#ffcf4d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    background:radial-gradient(1200px 700px at 70% -10%,#1b2140,#0f1220); color:var(--text); min-height:100vh; padding:24px;}
+  h1{font-size:20px; margin:0 0 4px}
+  .ver{font-size:11px; font-weight:600; color:var(--muted); background:var(--panel2);
+       border:1px solid var(--line); border-radius:20px; padding:2px 9px; vertical-align:middle; margin-left:8px}
+  .sub{color:var(--muted); font-size:13px; margin-bottom:14px}
+  a.navlink{color:var(--accent); text-decoration:none; font-size:13px; font-weight:600}
+  a.navlink:hover{text-decoration:underline}
+  .layout{display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px}
+
+  .board{display:grid; grid-template-columns:repeat(10,40px); grid-template-rows:repeat(5,40px);
+    gap:6px; padding:14px; background:var(--panel2); border-radius:14px; border:1px solid var(--line);}
+  .cell{width:40px; height:40px; border-radius:50%; background:#0d1020; border:2px solid #2a3152;
+    cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700;
+    color:rgba(255,255,255,.85); transition:transform .05s, box-shadow .1s; user-select:none;}
+  .cell:hover{transform:scale(1.06)}
+  .cell.given{border-color:#fff; box-shadow:0 0 0 2px rgba(255,255,255,.3) inset; cursor:not-allowed}
+  .cell.hint{border-color:var(--hint); box-shadow:0 0 0 2px rgba(255,207,77,.45) inset; cursor:not-allowed}
+  .cell.player{border-style:dashed; border-color:rgba(255,255,255,.6)}
+  .cell.target{outline:3px solid var(--hint); outline-offset:2px; animation:pulse 1s infinite}
+  @keyframes pulse{0%,100%{outline-color:var(--hint)}50%{outline-color:transparent}}
+
+  .levels{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px}
+  .lvl{background:var(--panel2); border:1px solid var(--line); color:var(--text); padding:8px 12px;
+    border-radius:10px; cursor:pointer; font-size:13px; font-weight:600}
+  .lvl.active{border-color:var(--accent); box-shadow:0 0 0 2px rgba(91,140,255,.3)}
+
+  .pieces{display:grid; grid-template-columns:repeat(5,1fr); gap:8px}
+  .piece{display:flex; flex-direction:column; align-items:center; gap:3px; padding:8px 6px;
+    background:var(--panel2); border:2px solid var(--line); border-radius:10px; cursor:pointer}
+  .piece.active{border-color:var(--accent); box-shadow:0 0 0 2px rgba(91,140,255,.3)}
+  .piece.locked{opacity:.5; cursor:not-allowed}
+  .swatch{width:22px; height:22px; border-radius:50%; border:2px solid rgba(255,255,255,.3)}
+  .piece .pid{font-size:12px; font-weight:700}
+  .piece .pname{font-size:9px; color:var(--muted); line-height:1.1; text-align:center}
+  .piece .tag{font-size:9px}
+  .tag.g{color:#fff} .tag.h{color:var(--hint)} .tag.d{color:var(--ok)}
+
+  .faces{display:flex; gap:10px; flex-wrap:wrap; margin-top:6px; min-height:10px}
+  .face{padding:6px 8px; background:var(--panel2); border:2px solid var(--line); border-radius:10px; cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; gap:4px}
+  .face.active{border-color:var(--accent)}
+  .facegrid{display:grid; gap:2px}
+  .dot{width:9px;height:9px;border-radius:50%;background:#2a3152}
+  .dot.on{background:var(--c)}
+  .face .meta{font-size:10px;color:var(--muted)}
+
+  .btns{display:flex; gap:10px; flex-wrap:wrap; margin-top:16px}
+  button{background:var(--accent); color:#fff; border:0; padding:10px 16px; border-radius:10px;
+    font-size:14px; font-weight:600; cursor:pointer}
+  button.secondary{background:var(--panel2); border:1px solid var(--line); color:var(--text)}
+  button.hintbtn{background:var(--hint); color:#241c00}
+  button:disabled{opacity:.5; cursor:not-allowed}
+  .status{margin-top:14px; font-size:14px; min-height:22px}
+  .status.ok{color:var(--ok)} .status.err{color:var(--err)} .status.info{color:var(--muted)} .status.hint{color:var(--hint)}
+  .counter{font-size:12px;color:var(--muted);margin-top:6px}
+  .hint{font-size:12px;color:var(--muted);margin-top:10px;max-width:360px;line-height:1.5}
+</style>
+</head>
+<body>
+  <h1>Завдання з підказками <span class="ver">v1.3 · 2026-06-06</span></h1>
+  <div class="sub">Оберіть рівень → доставте відсутні фігури. Застрягли — тисніть «Підказка». <a class="navlink" href="index.html">← На головну (вільний solver)</a></div>
+
+  <div class="layout">
+    <div class="card">
+      <div id="levels" class="levels"></div>
+      <div id="board" class="board" aria-label="Поле"></div>
+      <div class="btns">
+        <button id="newBtn">Нове завдання</button>
+        <button id="hintBtn" class="hintbtn">Підказка</button>
+        <button id="resetBtn" class="secondary">Скинути мої ходи</button>
+        <button id="revealBtn" class="secondary">Показати розв'язок</button>
+      </div>
+      <div id="status" class="status info"></div>
+      <div id="counter" class="counter"></div>
+    </div>
+
+    <div class="card" style="max-width:420px">
+      <div style="font-weight:600;margin-bottom:10px">Фігури, які треба поставити</div>
+      <div id="pieces" class="pieces"></div>
+      <div style="font-weight:600;margin:16px 0 6px">Грані активної фігури</div>
+      <div id="faces" class="faces"></div>
+      <div class="hint">
+        Клік по комірці малює активну фігуру (повторний клік — прибрати). Дано (білий контур) і підказки
+        (жовтий контур) зафіксовані. Можна знайти будь-який коректний розв'язок — не обов'язково той,
+        що в підказці. «Підказка»: 1-й клік підсвічує, куди стане наступна фігура; 2-й — ставить її.
+      </div>
+    </div>
+  </div>
+
+<script type="text/plain" id="core">
+/* ===== IQ Puzzler solver core (DOM-free) ===== */
+const ROWS = 5, COLS = 10, NCELLS = ROWS * COLS;
+
+/* 10 physical pieces of the set, captured from photos (top-down footprints).
+   Each has `faces`: the distinct footprints the 3D piece makes when resting on
+   each of its stable faces. Footprints are [dr,dc] ball offsets and may have
+   different ball counts. In any solution a piece appears as exactly ONE face.
+   Every piece has a 5-ball face (10x5 = 50); several also have a 6- or 4-ball
+   face, so full solutions can mix faces while still totalling 50. */
+const PIECES = [
+  { id:'A', name:'Жовта',     color:'#f5a623', faces:[ [[0,0],[0,1],[0,2],[0,3],[1,3]], [[0,0],[0,1],[1,0],[1,1],[1,2],[1,3]] ] },
+  { id:'B', name:'Помаранчева',color:'#ff6d00', faces:[ [[0,0],[0,1],[0,2],[0,3],[1,1]], [[0,1],[0,3],[1,0],[1,1],[1,2],[1,3]] ] },
+  { id:'C', name:'Рожева',    color:'#ff5dba', faces:[ [[0,0],[0,1],[0,2],[0,3],[1,0],[1,1]], [[0,1],[1,0],[1,1],[1,2],[1,3]] ] },
+  { id:'D', name:'Червона',   color:'#e8174a', faces:[ [[0,0],[0,1],[0,2],[0,3],[1,0]], [[0,0],[0,3],[1,0],[1,1],[1,2],[1,3]] ] },
+  { id:'E', name:'Голуба',    color:'#29b6f6', faces:[ [[0,0],[0,1],[0,2],[0,3],[1,0]], [[0,0],[0,2],[1,0],[1,1],[1,2],[1,3]] ] },
+  { id:'F', name:'Бірюзова',  color:'#1abc9c', faces:[ [[0,2],[1,0],[1,1],[1,2],[1,3]], [[0,0],[0,1],[0,2],[0,3],[1,1],[1,2]] ] },
+  { id:'G', name:'Фіолетова', color:'#8e44ad', faces:[ [[0,0],[0,1],[0,2],[1,1],[1,2]], [[0,0],[1,0],[1,1],[1,2]] ] },
+  { id:'H', name:'Синя',      color:'#2962ff', faces:[ [[0,0],[0,1],[0,2],[1,0],[1,2]], [[0,1],[1,0],[1,1],[1,2]] ] },
+  { id:'I', name:'Салатова',  color:'#a4d233', faces:[ [[0,0],[0,2],[1,0],[1,1],[1,2]], [[0,0],[0,1],[0,2],[1,0]] ] },
+  { id:'J', name:'Зелена',    color:'#2ecc40', faces:[ [[0,0],[0,1],[0,2],[1,0],[1,1]], [[0,1],[1,0],[1,1],[1,2]] ] },
+];
+
+/* ---- geometry helpers ---- */
+function normalize(cells){
+  let mr = Infinity, mc = Infinity;
+  for (const [r,c] of cells){ if(r<mr)mr=r; if(c<mc)mc=c; }
+  return cells.map(([r,c]) => [r-mr, c-mc]).sort((a,b)=> a[0]-b[0] || a[1]-b[1]);
+}
+function shapeKey(cells){ return cells.map(c=>c[0]+','+c[1]).join(';'); }
+
+// up to 4 unique in-plane rotations of one face footprint.
+// NOTE: no mirroring — these are 3D pieces, so a face can only be ROTATED while
+// it rests on the board. A flipped footprint would require resting on a
+// different face (which, if it exists, is listed separately in `faces`).
+function generateOrientations(face){
+  const out = new Map();
+  let cur = face.map(c=>c.slice());
+  for (let r=0; r<4; r++){
+    const n = normalize(cur);
+    out.set(shapeKey(n), n);
+    cur = cur.map(([r,c]) => [c, -r]);   // rotate 90deg
+  }
+  return [...out.values()];
+}
+
+const bit = (idx) => 1n << BigInt(idx);
+function maskOf(cells){ let m=0n; for(const i of cells) m |= bit(i); return m; }
+
+/* ---- precompute placements ---- */
+// placement: { pieceId, pieceIndex, faceIndex, mask, cells:[idx...] }
+function buildPlacements(){
+  const placements = [];
+  PIECES.forEach((piece, pieceIndex) => {
+    piece.faces.forEach((face, faceIndex) => {
+      for (const orient of generateOrientations(face)){
+        for (let row=0; row<ROWS; row++){
+          for (let col=0; col<COLS; col++){
+            const cells = [];
+            let ok = true;
+            for (const [dr,dc] of orient){
+              const r=row+dr, c=col+dc;
+              if (r<0||r>=ROWS||c<0||c>=COLS){ ok=false; break; }
+              cells.push(r*COLS+c);
+            }
+            if (ok) placements.push({ pieceId:piece.id, pieceIndex, faceIndex, mask:maskOf(cells), cells });
+          }
+        }
+      }
+    });
+  });
+  // index: for each cell, placements covering it
+  const byCell = Array.from({length:NCELLS}, ()=>[]);
+  placements.forEach((p,i)=> p.cells.forEach(cell => byCell[cell].push(i)) );
+  return { placements, byCell };
+}
+
+// smallest/largest face (ball count) of each piece — used for area & cavity pruning
+const PIECE_MIN_FACE = {}, PIECE_MAX_FACE = {};
+PIECES.forEach(p => {
+  PIECE_MIN_FACE[p.id] = Math.min(...p.faces.map(f=>f.length));
+  PIECE_MAX_FACE[p.id] = Math.max(...p.faces.map(f=>f.length));
+});
+
+// 4-neighbour adjacency for flood-fill (precomputed)
+const NEIGHBORS = (() => {
+  const n = Array.from({length:NCELLS}, ()=>[]);
+  for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++){
+    const i=r*COLS+c;
+    if (r>0) n[i].push(i-COLS);
+    if (r<ROWS-1) n[i].push(i+COLS);
+    if (c>0) n[i].push(i-1);
+    if (c<COLS-1) n[i].push(i+1);
+  }
+  return n;
+})();
+
+/* ---- solver: Exact Cover via DFS + BigInt masks ----
+   returns { solved, placements:[...], nodes, ms, aborted } */
+function solve(startOccupied, startUsed, model, limitNodes, skip){
+  const { placements, byCell } = model;
+  const record = [];
+  let nodes = 0;
+  const t0 = Date.now();
+  let aborted = false;
+  let skipLeft = skip || 0;   // skip this many solutions (for "next solution")
+  const visited = new Int32Array(NCELLS); // flood-fill stamp buffer
+  let stamp = 0;
+
+  // True if some empty connected region is too small to hold any remaining piece.
+  function hasDeadCavity(occupied, minRemaining){
+    stamp++;
+    for (let start=0; start<NCELLS; start++){
+      if ((occupied & bit(start)) || visited[start]===stamp) continue;
+      let size = 0; const queue=[start]; visited[start]=stamp;
+      while (queue.length){
+        const cell = queue.pop(); size++;
+        for (const nb of NEIGHBORS[cell]){
+          if (!(occupied & bit(nb)) && visited[nb]!==stamp){ visited[nb]=stamp; queue.push(nb); }
+        }
+      }
+      if (size < minRemaining) return true;
+    }
+    return false;
+  }
+
+  function dfs(occupied, used, filled){
+    if (limitNodes && nodes > limitNodes){ aborted = true; return false; }
+    nodes++;
+    if (used.size === PIECES.length){
+      if (filled !== NCELLS) return false;
+      if (skipLeft > 0){ skipLeft--; return false; } // keep searching for next
+      return true;
+    }
+    if (filled === NCELLS) return false; // cells full but pieces remain
+
+    // Area bound: every unused piece must still be placed, consuming between its
+    // smallest and largest face. Empty cells must fit within that window.
+    const empty = NCELLS - filled;
+    let sumMin = 0, sumMax = 0, minRemaining = Infinity;
+    for (const piece of PIECES) if (!used.has(piece.id)){
+      sumMin += PIECE_MIN_FACE[piece.id];
+      sumMax += PIECE_MAX_FACE[piece.id];
+      if (PIECE_MIN_FACE[piece.id] < minRemaining) minRemaining = PIECE_MIN_FACE[piece.id];
+    }
+    if (empty < sumMin || empty > sumMax) return false;
+    if (hasDeadCavity(occupied, minRemaining)) return false;
+
+    // most-constrained empty cell: fewest viable placements
+    let bestCell = -1, bestCand = null, bestLen = Infinity;
+    for (let cell=0; cell<NCELLS; cell++){
+      if (occupied & bit(cell)) continue;
+      const cand = [];
+      for (const pi of byCell[cell]){
+        const p = placements[pi];
+        if (used.has(p.pieceId)) continue;
+        if (p.mask & occupied) continue;
+        cand.push(pi);
+      }
+      if (cand.length < bestLen){ bestLen = cand.length; bestCell = cell; bestCand = cand;
+        if (bestLen === 0) break; }
+    }
+    if (bestCell === -1) return false;
+    if (bestCand.length === 0) return false;
+
+    for (const pi of bestCand){
+      const p = placements[pi];
+      used.add(p.pieceId);
+      record.push(pi);
+      if (dfs(occupied | p.mask, used, filled + p.cells.length)) return true;
+      record.pop();
+      used.delete(p.pieceId);
+      if (aborted) return false;
+    }
+    return false;
+  }
+
+  // popcount of starting occupied mask
+  let filled0 = 0; { let m = startOccupied; while (m){ filled0 += Number(m & 1n); m >>= 1n; } }
+  const solved = dfs(startOccupied, new Set(startUsed), filled0);
+  return {
+    solved, aborted,
+    placements: record.map(i => ({ pieceId:placements[i].pieceId, faceIndex:placements[i].faceIndex, cells:placements[i].cells })),
+    nodes, ms: Date.now()-t0,
+  };
+}
+</script>
+<script>
+(function(){
+  const coreText = document.getElementById('core').textContent;
+  const Core = new Function(coreText + `
+    return { ROWS, COLS, NCELLS, PIECES, normalize, shapeKey, generateOrientations, buildPlacements, solve };
+  `)();
+  const { ROWS, COLS, NCELLS, PIECES, normalize, shapeKey, generateOrientations, buildPlacements, solve } = Core;
+  const model = buildPlacements();
+  const pieceById = Object.fromEntries(PIECES.map(p => [p.id, p]));
+  const SHAPE_KEYS = {};
+  PIECES.forEach(p => { const s=new Set(); p.faces.forEach(f=>generateOrientations(f).forEach(o=>s.add(shapeKey(o)))); SHAPE_KEYS[p.id]=s; });
+
+  const LEVELS = [
+    { name:'Легке',   keep:6 },
+    { name:'Середнє', keep:4 },
+    { name:'Важке',   keep:2 },
+    { name:'Експерт', keep:0 },
+  ];
+  let level = 0;
+
+  let refByPiece = {};         // pieceId -> [cells] of the generated reference solution
+  let givenSet = new Set();    // pieces shown as the clue
+  let hintedSet = new Set();   // pieces revealed by hints (locked at reference position)
+  let playerCells = new Map(); // cell -> pieceId (manual)
+  let activePiece = null, activeFace = 0;
+  let pendingHint = null;      // pieceId staged by a first hint click
+  let hintsUsed = 0;
+  let solved = false;
+
+  const boardEl=document.getElementById('board'), piecesEl=document.getElementById('pieces'),
+        facesEl=document.getElementById('faces'), statusEl=document.getElementById('status'),
+        counterEl=document.getElementById('counter'), levelsEl=document.getElementById('levels');
+
+  const cellEls=[];
+  for(let i=0;i<NCELLS;i++){ const d=document.createElement('div'); d.className='cell';
+    d.addEventListener('click',()=>onCell(i)); boardEl.appendChild(d); cellEls.push(d); }
+
+  LEVELS.forEach((L,idx)=>{ const b=document.createElement('div'); b.className='lvl';
+    b.textContent=L.name; b.addEventListener('click',()=>{ level=idx; newChallenge(); }); levelsEl.appendChild(b); });
+  function renderLevels(){ [...levelsEl.children].forEach((b,idx)=>b.className='lvl'+(idx===level?' active':'')); }
+
+  function setStatus(m,k){ statusEl.className='status '+(k||'info'); statusEl.innerHTML=m; }
+  function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+
+  function buildLocked(){
+    const m=new Map();
+    for(const pid of givenSet) for(const c of refByPiece[pid]) m.set(c,{pid,kind:'given'});
+    for(const pid of hintedSet) for(const c of refByPiece[pid]) m.set(c,{pid,kind:'hint'});
+    return m;
+  }
+  function placeable(pid){ return !givenSet.has(pid)&&!hintedSet.has(pid); }
+
+  function newChallenge(){
+    const keep=LEVELS[level].keep;
+    const skip=Math.floor(Math.random()*40);
+    let res=solve(0n,new Set(),model,0,skip);
+    if(!res.solved) res=solve(0n,new Set(),model,0,0);
+    refByPiece={};
+    res.placements.forEach(p=>refByPiece[p.pieceId]=p.cells.slice());
+    const ids=shuffle(PIECES.map(p=>p.id));
+    givenSet=new Set(ids.slice(0,keep));
+    hintedSet=new Set(); playerCells=new Map(); pendingHint=null; hintsUsed=0; solved=false;
+    activePiece=(PIECES.find(p=>!givenSet.has(p.id))||{}).id||null; activeFace=0;
+    renderLevels();
+    const toPlace=PIECES.length-keep;
+    setStatus(`Рівень: <b>${LEVELS[level].name}</b>. Треба поставити <b>${toPlace}</b> фігур.`,'info');
+    render();
+  }
+
+  function onCell(i){
+    if(solved) return;
+    if(buildLocked().has(i)) return;
+    if(!activePiece||!placeable(activePiece)){ setStatus('Спершу оберіть фігуру праворуч.','err'); return; }
+    if(playerCells.get(i)===activePiece) playerCells.delete(i);
+    else playerCells.set(i,activePiece);
+    pendingHint=null; render(); autoCheck();
+  }
+
+  function render(){
+    const locked=buildLocked();
+    const target = pendingHint ? new Set(refByPiece[pendingHint]) : null;
+    for(let i=0;i<NCELLS;i++){
+      const el=cellEls[i]; let pid=null, klass='cell';
+      if(locked.has(i)){ const o=locked.get(i); pid=o.pid; klass+= o.kind==='given'?' given':' hint'; }
+      else if(playerCells.has(i)){ pid=playerCells.get(i); klass+=' player'; }
+      if(target&&target.has(i)&&!locked.has(i)) klass+=' target';
+      el.className=klass; el.style.background=pid?pieceById[pid].color:''; el.textContent=pid||'';
+    }
+    renderPieces(); renderFaces(); renderCounter();
+  }
+
+  function pieceState(pid){
+    if(givenSet.has(pid)) return 'given';
+    if(hintedSet.has(pid)) return 'hint';
+    for(const v of playerCells.values()) if(v===pid) return 'placed';
+    return 'todo';
+  }
+  function renderPieces(){
+    piecesEl.innerHTML='';
+    PIECES.forEach(p=>{
+      const st=pieceState(p.id), lockedP=(st==='given'||st==='hint');
+      const el=document.createElement('div');
+      el.className='piece'+(p.id===activePiece&&!lockedP?' active':'')+(lockedP?' locked':'');
+      el.title=p.name;
+      const tag = st==='given'?'<div class="tag g">дано</div>'
+                : st==='hint'?'<div class="tag h">підказка</div>'
+                : st==='placed'?'<div class="tag d">● стоїть</div>'
+                : '<div class="tag">&nbsp;</div>';
+      el.innerHTML=`<div class="swatch" style="background:${p.color}"></div><div class="pid">${p.id}</div><div class="pname">${p.name}</div>${tag}`;
+      if(!lockedP) el.addEventListener('click',()=>{ activePiece=p.id; activeFace=0; render(); });
+      piecesEl.appendChild(el);
+    });
+  }
+  function faceMini(face,color,active){
+    const o=normalize(face), maxR=Math.max(...o.map(c=>c[0])), maxC=Math.max(...o.map(c=>c[1]));
+    const on=new Set(o.map(c=>c[0]+','+c[1]));
+    const w=document.createElement('div'); w.className='face'+(active?' active':'');
+    const g=document.createElement('div'); g.className='facegrid'; g.style.gridTemplateColumns=`repeat(${maxC+1},9px)`;
+    for(let r=0;r<=maxR;r++)for(let c=0;c<=maxC;c++){ const d=document.createElement('div'); d.className='dot'+(on.has(r+','+c)?' on':''); d.style.setProperty('--c',color); g.appendChild(d); }
+    const m=document.createElement('div'); m.className='meta'; m.textContent=face.length+' куль.';
+    w.appendChild(g); w.appendChild(m); return w;
+  }
+  function renderFaces(){
+    facesEl.innerHTML='';
+    if(!activePiece||!placeable(activePiece)){ facesEl.innerHTML='<span class="meta" style="font-size:12px">— оберіть фігуру —</span>'; return; }
+    const p=pieceById[activePiece];
+    p.faces.forEach((f,idx)=>{ const el=faceMini(f,p.color,idx===activeFace); el.addEventListener('click',()=>{ activeFace=idx; render(); }); facesEl.appendChild(el); });
+  }
+  function renderCounter(){
+    const placed=new Set([...playerCells.values()]).size, need=PIECES.length-givenSet.size-hintedSet.size;
+    counterEl.textContent=`Дано: ${givenSet.size} · підказок: ${hintedSet.size} · ваші фігури: ${placed}/${need}`;
+  }
+
+  function playerShapeKey(pid){
+    const cells=[...playerCells.entries()].filter(([,v])=>v===pid).map(([i])=>i);
+    if(!cells.length) return null;
+    return shapeKey(normalize(cells.map(i=>[Math.floor(i/COLS),i%COLS])));
+  }
+
+  function autoCheck(){
+    const locked=buildLocked();
+    if(locked.size+playerCells.size<NCELLS) return;
+    const present=new Set([...givenSet,...hintedSet,...playerCells.values()]);
+    if(present.size!==PIECES.length){ setStatus('Поле повне, але якусь фігуру задіяно двічі.','err'); return; }
+    for(const pid of new Set(playerCells.values())){
+      if(!SHAPE_KEYS[pid].has(playerShapeKey(pid))){
+        setStatus('Поле повне, але форма однієї з ваших фігур не відповідає жодній її грані.','err'); return; }
+    }
+    solved=true; pendingHint=null;
+    setStatus(`Розв'язано! 🎉  Підказок використано: ${hintsUsed}.`,'ok'); render();
+  }
+
+  function nextHintPiece(){
+    for(const p of PIECES){
+      const pid=p.id;
+      if(givenSet.has(pid)||hintedSet.has(pid)) continue;
+      const cells=[...playerCells.entries()].filter(([,v])=>v===pid).map(([i])=>i).sort((a,b)=>a-b);
+      const ref=refByPiece[pid].slice().sort((a,b)=>a-b);
+      const same=cells.length===ref.length&&cells.every((c,idx)=>c===ref[idx]);
+      if(!same) return pid;
+    }
+    return null;
+  }
+
+  function onHint(){
+    if(solved) return;
+    if(pendingHint){
+      const pid=pendingHint;
+      for(const c of refByPiece[pid]) playerCells.delete(c);
+      for(const [c,v] of [...playerCells]) if(v===pid) playerCells.delete(c);
+      hintedSet.add(pid); pendingHint=null; hintsUsed++;
+      if(!placeable(activePiece)) activePiece=(PIECES.find(p=>placeable(p.id))||{}).id||null;
+      setStatus(`Поставлено «${pieceById[pid].name}».`,'hint'); render(); autoCheck(); return;
+    }
+    const pid=nextHintPiece();
+    if(!pid){ setStatus('Усі фігури вже на місці.','info'); return; }
+    pendingHint=pid;
+    setStatus(`Наступна — «${pieceById[pid].name}». Місце підсвічено. Натисніть «Підказка» ще раз, щоб поставити її.`,'hint');
+    render();
+  }
+  function onReveal(){
+    for(const p of PIECES) if(!givenSet.has(p.id)) hintedSet.add(p.id);
+    playerCells=new Map(); pendingHint=null; solved=true;
+    setStatus('Показано повний розв’язок.','info'); render();
+  }
+  function onReset(){
+    if(solved) return;
+    playerCells=new Map(); pendingHint=null; setStatus('Ваші ходи скинуто.','info'); render();
+  }
+
+  document.getElementById('newBtn').addEventListener('click',newChallenge);
+  document.getElementById('hintBtn').addEventListener('click',onHint);
+  document.getElementById('revealBtn').addEventListener('click',onReveal);
+  document.getElementById('resetBtn').addEventListener('click',onReset);
+
+  newChallenge();
+})();
+</script>
+</body>
+</html>
