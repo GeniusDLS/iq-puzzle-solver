@@ -148,17 +148,17 @@ function normalize(cells){
 }
 function shapeKey(cells){ return cells.map(c=>c[0]+','+c[1]).join(';'); }
 
-// up to 8 unique orientations (4 rotations x mirror) of one face footprint
+// up to 4 unique in-plane rotations of one face footprint.
+// NOTE: no mirroring — these are 3D pieces, so a face can only be ROTATED while
+// it rests on the board. A flipped footprint would require resting on a
+// different face (which, if it exists, is listed separately in `faces`).
 function generateOrientations(face){
   const out = new Map();
   let cur = face.map(c=>c.slice());
-  for (let f=0; f<2; f++){
-    for (let r=0; r<4; r++){
-      const n = normalize(cur);
-      out.set(shapeKey(n), n);
-      cur = cur.map(([r,c]) => [c, -r]);   // rotate 90deg
-    }
-    cur = cur.map(([r,c]) => [r, -c]);      // mirror
+  for (let r=0; r<4; r++){
+    const n = normalize(cur);
+    out.set(shapeKey(n), n);
+    cur = cur.map(([r,c]) => [c, -r]);   // rotate 90deg
   }
   return [...out.values()];
 }
