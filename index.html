@@ -92,7 +92,7 @@
 </style>
 </head>
 <body>
-  <h1>IQ Puzzler Solver <span class="ver">v1.6 · 2026-06-06</span></h1>
+  <h1>IQ Puzzler Solver <span class="ver">v1.7 · 2026-06-06</span></h1>
   <div class="sub">Поле 5×10 • 10 об'ємних фігур • кожна лягає однією зі своїх граней (faces) &nbsp;·&nbsp; <a class="navlink" href="challenges.html">Завдання з підказками →</a></div>
 
   <div class="layout">
@@ -415,6 +415,30 @@ self.onmessage = (e) => {
   function pieceDone(pid){ const c = pieceCells(pid); return c.length>0 && validatePieceShape(pid, c).ok; }
   function firstFreePiece(){ return (PIECES.find(p => !pieceDone(p.id)) || {}).id || null; }
 
+  // Cells that the active piece (its selected face) could still cover: union of
+  // all in-bounds orientations that avoid other pieces and include the cells
+  // already painted for this piece. Narrows as you paint.
+  function candidateCells(){
+    if (!activePiece) return null;
+    const piece = pieceById[activePiece];
+    const cur = pieceCells(activePiece);
+    const blocked = new Set([...fixed.entries()].filter(([,v]) => v!==activePiece).map(([i]) => i));
+    const res = new Set();
+    const face = piece.faces[activeFace] || piece.faces[0];
+    for (const o of generateOrientations(face)){
+      for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++){
+        const cells=[]; let ok=true;
+        for (const [dr,dc] of o){ const rr=r+dr, cc=c+dc;
+          if (rr<0||rr>=ROWS||cc<0||cc>=COLS){ ok=false; break; }
+          const idx=rr*COLS+cc; if (blocked.has(idx)){ ok=false; break; } cells.push(idx); }
+        if (!ok) continue;
+        if (cur.length){ let cov=true; for (const x of cur) if (cells.indexOf(x)<0){ cov=false; break; } if (!cov) continue; }
+        for (const x of cells) res.add(x);
+      }
+    }
+    return res;
+  }
+
   function onCellClick(i){
     if (solving) return;
     // Any manual edit invalidates the solver overlay.
@@ -433,13 +457,14 @@ self.onmessage = (e) => {
   }
 
   function render(){
-    const placing = activePiece && !pieceDone(activePiece); // highlight free cells while placing
+    const placing = activePiece && !pieceDone(activePiece); // highlight where the active face can fit
+    const cand = placing ? candidateCells() : null;
     for (let i=0;i<NCELLS;i++){
       const el = cellEls[i];
       let pid = fixed.get(i), klass = 'cell', label = '';
       if (pid !== undefined){ klass += ' fixed'; }
       else if (solverCells.has(i)){ pid = solverCells.get(i); klass += ' solver'; }
-      else if (placing){ klass += ' free'; }
+      else if (cand && cand.has(i)){ klass += ' free'; }
       if (pid !== undefined){
         el.style.background = pieceById[pid].color;
         label = pid;
