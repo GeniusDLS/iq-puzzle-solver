@@ -79,10 +79,18 @@
   .warn{color:var(--err)}
   .hint{font-size:12px;color:var(--muted);margin-top:10px;max-width:360px;line-height:1.5}
   label.toggle{font-size:13px;color:var(--muted);display:flex;gap:6px;align-items:center;cursor:pointer}
+
+  /* On narrow screens show the board vertically (10 rows x 5 cols). */
+  @media (max-width:600px){
+    body{padding:14px}
+    .layout{gap:16px}
+    .board{grid-template-columns:repeat(5,44px); grid-template-rows:repeat(10,44px)}
+    .cell{grid-row:var(--vr); grid-column:var(--vc); width:44px; height:44px}
+  }
 </style>
 </head>
 <body>
-  <h1>IQ Puzzler Solver <span class="ver">v1.3 · 2026-06-06</span></h1>
+  <h1>IQ Puzzler Solver <span class="ver">v1.5 · 2026-06-06</span></h1>
   <div class="sub">Поле 5×10 • 10 об'ємних фігур • кожна лягає однією зі своїх граней (faces) &nbsp;·&nbsp; <a class="navlink" href="challenges.html">Завдання з підказками →</a></div>
 
   <div class="layout">
@@ -390,6 +398,9 @@ self.onmessage = (e) => {
     const d = document.createElement('div');
     d.className = 'cell';
     d.dataset.idx = i;
+    // vertical (mobile) layout target cell: rotate the 5x10 board 90deg
+    d.style.setProperty('--vr', (i % COLS) + 1);
+    d.style.setProperty('--vc', ROWS - Math.floor(i / COLS));
     d.addEventListener('click', () => onCellClick(i));
     boardEl.appendChild(d);
     cellEls.push(d);

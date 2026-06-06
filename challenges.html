@@ -72,10 +72,18 @@
   #toast{position:fixed; left:50%; bottom:28px; transform:translateX(-50%);
     background:#0c0f1c; border:1px solid var(--line); color:var(--text); padding:10px 16px;
     border-radius:10px; font-size:13px; opacity:0; transition:opacity .25s; pointer-events:none; z-index:9}
+
+  /* On narrow screens show the board vertically (10 rows x 5 cols). */
+  @media (max-width:600px){
+    body{padding:14px}
+    .layout{gap:16px}
+    .board{grid-template-columns:repeat(5,44px); grid-template-rows:repeat(10,44px)}
+    .cell{grid-row:var(--vr); grid-column:var(--vc); width:44px; height:44px}
+  }
 </style>
 </head>
 <body>
-  <h1>Завдання з підказками <span class="ver">v1.4 · 2026-06-06</span></h1>
+  <h1>Завдання з підказками <span class="ver">v1.5 · 2026-06-06</span></h1>
   <div class="sub">Оберіть рівень → доставте відсутні фігури. Застрягли — тисніть «Підказка». <a class="navlink" href="index.html">← На головну (вільний solver)</a></div>
 
   <div class="layout">
@@ -308,11 +316,14 @@ function solve(startOccupied, startUsed, model, limitNodes, skip){
   const SHAPE_KEYS = {};
   PIECES.forEach(p => { const s=new Set(); p.faces.forEach(f=>generateOrientations(f).forEach(o=>s.add(shapeKey(o)))); SHAPE_KEYS[p.id]=s; });
 
+  // `remove` = how many pieces we try to take away from a full reference; the
+  // generator only removes a piece while the puzzle keeps a UNIQUE solution, so
+  // every challenge has exactly one answer (Expert removes as many as possible).
   const LEVELS = [
-    { name:'Легке',   keep:6 },
-    { name:'Середнє', keep:4 },
-    { name:'Важке',   keep:2 },
-    { name:'Експерт', keep:0 },
+    { name:'Легке',   remove:3 },
+    { name:'Середнє', remove:5 },
+    { name:'Важке',   remove:7 },
+    { name:'Експерт', remove:10 },
   ];
   let level = 0;
 
@@ -355,6 +366,7 @@ function solve(startOccupied, startUsed, model, limitNodes, skip){
 
   const cellEls=[];
   for(let i=0;i<NCELLS;i++){ const d=document.createElement('div'); d.className='cell';
+    d.style.setProperty('--vr',(i%COLS)+1); d.style.setProperty('--vc',ROWS-Math.floor(i/COLS));
     d.addEventListener('click',()=>onCell(i)); boardEl.appendChild(d); cellEls.push(d); }
 
   LEVELS.forEach((L,idx)=>{ const b=document.createElement('div'); b.className='lvl';
@@ -373,22 +385,39 @@ function solve(startOccupied, startUsed, model, limitNodes, skip){
   }
   function placeable(pid){ return !givenSet.has(pid)&&!hintedSet.has(pid); }
 
+  function maskCells(cells){ let m=0n; for(const c of cells) m|=1n<<BigInt(c); return m; }
+  // True if, with `givenIds` fixed at their reference cells, the rest of the
+  // board can be completed in EXACTLY one way.
+  function uniqueWith(givenIds){
+    let occ=0n; const used=new Set();
+    for(const pid of givenIds){ used.add(pid); occ|=maskCells(refByPiece[pid]); }
+    if(!solve(occ,used,model,0,0).solved) return false; // reference always completes it
+    return !solve(occ,used,model,0,1).solved;           // unique iff no 2nd solution
+  }
+
   function newChallenge(seed){
     curSeed = seed || randSeedStr();
     rng = mulberry32(hashSeed(curSeed+':'+level));
-    const keep=LEVELS[level].keep;
     const skip=Math.floor(rng()*40);
     let res=solve(0n,new Set(),model,0,skip);
     if(!res.solved) res=solve(0n,new Set(),model,0,0);
     refByPiece={};
     res.placements.forEach(p=>refByPiece[p.pieceId]=p.cells.slice());
-    const ids=shuffle(PIECES.map(p=>p.id));
-    givenSet=new Set(ids.slice(0,keep));
+    // Greedily remove pieces (seeded order) while a unique completion remains.
+    let given=new Set(PIECES.map(p=>p.id));
+    const order=shuffle(PIECES.map(p=>p.id));
+    const target=LEVELS[level].remove; let removed=0;
+    for(const pid of order){
+      if(removed>=target) break;
+      const trial=new Set(given); trial.delete(pid);
+      if(uniqueWith(trial)){ given=trial; removed++; }
+    }
+    givenSet=given;
     hintedSet=new Set(); playerCells=new Map(); pendingHint=null; hintsUsed=0; solved=false;
     activePiece=(PIECES.find(p=>!givenSet.has(p.id))||{}).id||null; activeFace=0;
     renderLevels(); renderRecord(); updateUrl(); startTimer();
-    const toPlace=PIECES.length-keep;
-    setStatus(`Рівень: <b>${LEVELS[level].name}</b> · код <b>${curSeed}</b>. Треба поставити <b>${toPlace}</b> фігур.`,'info');
+    const toPlace=PIECES.length-givenSet.size;
+    setStatus(`Рівень: <b>${LEVELS[level].name}</b> · код <b>${curSeed}</b> · <b>один</b> розв'язок. Поставте <b>${toPlace}</b> фігур.`,'info');
     render();
   }
 
