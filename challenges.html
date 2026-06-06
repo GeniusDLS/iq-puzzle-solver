@@ -27,6 +27,7 @@
     cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700;
     color:rgba(255,255,255,.85); transition:transform .05s, box-shadow .1s; user-select:none;}
   .cell:hover{transform:scale(1.06)}
+  .cell.free{box-shadow:0 0 0 2px rgba(91,140,255,.35) inset}
   .cell.given{border-color:#fff; box-shadow:0 0 0 2px rgba(255,255,255,.3) inset; cursor:not-allowed}
   .cell.hint{border-color:var(--hint); box-shadow:0 0 0 2px rgba(255,207,77,.45) inset; cursor:not-allowed}
   .cell.player{border-style:dashed; border-color:rgba(255,255,255,.6)}
@@ -83,7 +84,7 @@
 </style>
 </head>
 <body>
-  <h1>Завдання з підказками <span class="ver">v1.5 · 2026-06-06</span></h1>
+  <h1>Завдання з підказками <span class="ver">v1.6 · 2026-06-06</span></h1>
   <div class="sub">Оберіть рівень → доставте відсутні фігури. Застрягли — тисніть «Підказка». <a class="navlink" href="index.html">← На головну (вільний solver)</a></div>
 
   <div class="layout">
@@ -421,22 +422,30 @@ function solve(startOccupied, startUsed, model, limitNodes, skip){
     render();
   }
 
+  function pieceCellsP(pid){ return [...playerCells.entries()].filter(([,v])=>v===pid).map(([i])=>i); }
+  function pieceDoneP(pid){ const k=playerShapeKey(pid); return !!k && SHAPE_KEYS[pid].has(k); }
+  function nextFreePiece(){ return (PIECES.find(p=>placeable(p.id)&&!pieceDoneP(p.id))||{}).id||null; }
+
   function onCell(i){
     if(solved) return;
-    if(buildLocked().has(i)) return;
-    if(!activePiece||!placeable(activePiece)){ setStatus('Спершу оберіть фігуру праворуч.','err'); return; }
-    if(playerCells.get(i)===activePiece) playerCells.delete(i);
-    else playerCells.set(i,activePiece);
+    if(buildLocked().has(i)) return;               // дано/підказка зафіксовані
+    if(playerCells.has(i)){ playerCells.delete(i); pendingHint=null; render(); autoCheck(); return; } // клік по клітинці стирає
+    if(!activePiece||!placeable(activePiece)||pieceDoneP(activePiece)) activePiece=nextFreePiece();
+    if(!activePiece){ setStatus('Усі фігури вже стоять.','info'); return; }
+    playerCells.set(i,activePiece);
+    if(pieceDoneP(activePiece)){ const f=nextFreePiece(); if(f){ activePiece=f; activeFace=0; } } // авто-перехід
     pendingHint=null; render(); autoCheck();
   }
 
   function render(){
     const locked=buildLocked();
     const target = pendingHint ? new Set(refByPiece[pendingHint]) : null;
+    const placing = activePiece && placeable(activePiece) && !pieceDoneP(activePiece);
     for(let i=0;i<NCELLS;i++){
       const el=cellEls[i]; let pid=null, klass='cell';
       if(locked.has(i)){ const o=locked.get(i); pid=o.pid; klass+= o.kind==='given'?' given':' hint'; }
       else if(playerCells.has(i)){ pid=playerCells.get(i); klass+=' player'; }
+      else if(placing){ klass+=' free'; }   // підсвітити вільні клітинки під час розміщення
       if(target&&target.has(i)&&!locked.has(i)) klass+=' target';
       el.className=klass; el.style.background=pid?pieceById[pid].color:''; el.textContent=pid||'';
     }
@@ -446,19 +455,21 @@ function solve(startOccupied, startUsed, model, limitNodes, skip){
   function pieceState(pid){
     if(givenSet.has(pid)) return 'given';
     if(hintedSet.has(pid)) return 'hint';
-    for(const v of playerCells.values()) if(v===pid) return 'placed';
+    if(pieceDoneP(pid)) return 'done';
+    for(const v of playerCells.values()) if(v===pid) return 'partial';
     return 'todo';
   }
   function renderPieces(){
     piecesEl.innerHTML='';
     PIECES.forEach(p=>{
-      const st=pieceState(p.id), lockedP=(st==='given'||st==='hint');
+      const st=pieceState(p.id), lockedP=(st==='given'||st==='hint'||st==='done');
       const el=document.createElement('div');
       el.className='piece'+(p.id===activePiece&&!lockedP?' active':'')+(lockedP?' locked':'');
       el.title=p.name;
       const tag = st==='given'?'<div class="tag g">дано</div>'
                 : st==='hint'?'<div class="tag h">підказка</div>'
-                : st==='placed'?'<div class="tag d">● стоїть</div>'
+                : st==='done'?'<div class="tag d">✓ стоїть</div>'
+                : st==='partial'?'<div class="tag" style="color:var(--muted)">…малюється</div>'
                 : '<div class="tag">&nbsp;</div>';
       el.innerHTML=`<div class="swatch" style="background:${p.color}"></div><div class="pid">${p.id}</div><div class="pname">${p.name}</div>${tag}`;
       if(!lockedP) el.addEventListener('click',()=>{ activePiece=p.id; activeFace=0; render(); });

@@ -37,6 +37,7 @@
     user-select:none;
   }
   .cell:hover{transform:scale(1.06)}
+  .cell.free{box-shadow:0 0 0 2px rgba(91,140,255,.35) inset}
   .cell.fixed{border-color:#ffffff; box-shadow:0 0 0 2px rgba(255,255,255,.25) inset}
   .cell.solver{border-style:dashed; border-color:rgba(255,255,255,.55); opacity:.92}
   .cell.solver .lbl{opacity:.85}
@@ -48,6 +49,7 @@
     background:var(--panel2); border:2px solid var(--line); border-radius:10px; cursor:pointer;
   }
   .piece.active{border-color:var(--accent); box-shadow:0 0 0 2px rgba(91,140,255,.3)}
+  .piece.locked{opacity:.45; cursor:not-allowed}
   .swatch{width:22px; height:22px; border-radius:50%; border:2px solid rgba(255,255,255,.3)}
   .piece .pid{font-size:12px; font-weight:700}
   .piece .pname{font-size:9px; color:var(--muted); line-height:1.1; text-align:center}
@@ -90,7 +92,7 @@
 </style>
 </head>
 <body>
-  <h1>IQ Puzzler Solver <span class="ver">v1.5 · 2026-06-06</span></h1>
+  <h1>IQ Puzzler Solver <span class="ver">v1.6 · 2026-06-06</span></h1>
   <div class="sub">Поле 5×10 • 10 об'ємних фігур • кожна лягає однією зі своїх граней (faces) &nbsp;·&nbsp; <a class="navlink" href="challenges.html">Завдання з підказками →</a></div>
 
   <div class="layout">
@@ -408,24 +410,36 @@ self.onmessage = (e) => {
 
   function setStatus(msg, kind){ statusEl.className = 'status ' + (kind||'info'); statusEl.textContent = msg; }
 
+  const pieceCells = (pid) => [...fixed.entries()].filter(([,v]) => v===pid).map(([i]) => i);
+  // A piece is "done" once its painted cells form a complete valid face.
+  function pieceDone(pid){ const c = pieceCells(pid); return c.length>0 && validatePieceShape(pid, c).ok; }
+  function firstFreePiece(){ return (PIECES.find(p => !pieceDone(p.id)) || {}).id || null; }
+
   function onCellClick(i){
     if (solving) return;
     // Any manual edit invalidates the solver overlay.
     if (solverCells.size){ solverCells = new Map(); nextBtn.disabled = true; }
-    const cur = fixed.get(i);
-    if (cur === activePiece) fixed.delete(i);     // toggle off
-    else fixed.set(i, activePiece);               // set / reassign to active piece
+    if (fixed.has(i)){
+      fixed.delete(i);                            // click a filled cell -> erase it
+    } else {
+      if (!activePiece || pieceDone(activePiece)) activePiece = firstFreePiece(); // active already placed -> next free
+      if (!activePiece){ setStatus('Усі фігури вже розставлено. Зітріть якусь, щоб змінити.', 'info'); return; }
+      fixed.set(i, activePiece);                  // place active piece
+      if (pieceDone(activePiece)){ const f=firstFreePiece(); if(f){ activePiece=f; activeFace=0; } } // auto-advance
+    }
     render();
     setStatus("Готово до розв'язання.", 'info');
     diagEl.textContent = '';
   }
 
   function render(){
+    const placing = activePiece && !pieceDone(activePiece); // highlight free cells while placing
     for (let i=0;i<NCELLS;i++){
       const el = cellEls[i];
       let pid = fixed.get(i), klass = 'cell', label = '';
       if (pid !== undefined){ klass += ' fixed'; }
       else if (solverCells.has(i)){ pid = solverCells.get(i); klass += ' solver'; }
+      else if (placing){ klass += ' free'; }
       if (pid !== undefined){
         el.style.background = pieceById[pid].color;
         label = pid;
@@ -443,15 +457,18 @@ self.onmessage = (e) => {
   function renderPalette(){
     piecesEl.innerHTML = '';
     PIECES.forEach(p => {
-      const used = [...fixed.values()].includes(p.id);
+      const done = pieceDone(p.id);
+      const partial = !done && pieceCells(p.id).length>0;
       const el = document.createElement('div');
-      el.className = 'piece' + (p.id===activePiece ? ' active' : '');
+      el.className = 'piece' + (p.id===activePiece && !done ? ' active' : '') + (done ? ' locked' : '');
       el.title = p.name || p.id;
+      const tag = done ? '<div class="done">✓ стоїть</div>'
+                : partial ? '<div class="done" style="color:var(--muted)">…малюється</div>'
+                : '<div class="done">&nbsp;</div>';
       el.innerHTML = `<div class="swatch" style="background:${p.color}"></div>
                       <div class="pid">${p.id}</div>
-                      <div class="pname">${p.name || ''}</div>
-                      <div class="done">${used ? '● на полі' : ''}</div>`;
-      el.addEventListener('click', () => { activePiece = p.id; activeFace = 0; render(); });
+                      <div class="pname">${p.name || ''}</div>${tag}`;
+      if (!done) el.addEventListener('click', () => { activePiece = p.id; activeFace = 0; render(); });
       piecesEl.appendChild(el);
     });
   }
