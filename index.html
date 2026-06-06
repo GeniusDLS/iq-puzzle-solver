@@ -37,7 +37,7 @@
     user-select:none;
   }
   .cell:hover{transform:scale(1.06)}
-  .cell.free{box-shadow:0 0 0 2px rgba(91,140,255,.35) inset}
+  .cell.free{background:rgba(91,140,255,.30); border-color:var(--accent); box-shadow:0 0 8px rgba(91,140,255,.6)}
   .cell.fixed{border-color:#ffffff; box-shadow:0 0 0 2px rgba(255,255,255,.25) inset}
   .cell.solver{border-style:dashed; border-color:rgba(255,255,255,.55); opacity:.92}
   .cell.solver .lbl{opacity:.85}
@@ -92,7 +92,7 @@
 </style>
 </head>
 <body>
-  <h1>IQ Puzzler Solver <span class="ver">v1.7 · 2026-06-06</span></h1>
+  <h1>IQ Puzzler Solver <span class="ver">v1.8 · 2026-06-06</span></h1>
   <div class="sub">Поле 5×10 • 10 об'ємних фігур • кожна лягає однією зі своїх граней (faces) &nbsp;·&nbsp; <a class="navlink" href="challenges.html">Завдання з підказками →</a></div>
 
   <div class="layout">
@@ -441,16 +441,17 @@ self.onmessage = (e) => {
 
   function onCellClick(i){
     if (solving) return;
-    // Any manual edit invalidates the solver overlay.
-    if (solverCells.size){ solverCells = new Map(); nextBtn.disabled = true; }
     if (fixed.has(i)){
       fixed.delete(i);                            // click a filled cell -> erase it
     } else {
       if (!activePiece || pieceDone(activePiece)) activePiece = firstFreePiece(); // active already placed -> next free
       if (!activePiece){ setStatus('Усі фігури вже розставлено. Зітріть якусь, щоб змінити.', 'info'); return; }
-      fixed.set(i, activePiece);                  // place active piece
+      const cand = candidateCells();              // only the highlighted cells are valid
+      if (cand && !cand.has(i)){ setStatus('Сюди ця грань не стане — клікайте по підсвічених клітинках.', 'err'); return; }
+      fixed.set(i, activePiece);                  // place a ball of the active piece
       if (pieceDone(activePiece)){ const f=firstFreePiece(); if(f){ activePiece=f; activeFace=0; } } // auto-advance
     }
+    if (solverCells.size){ solverCells = new Map(); nextBtn.disabled = true; } // a successful edit invalidates the solver overlay
     render();
     setStatus("Готово до розв'язання.", 'info');
     diagEl.textContent = '';

@@ -27,7 +27,7 @@
     cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700;
     color:rgba(255,255,255,.85); transition:transform .05s, box-shadow .1s; user-select:none;}
   .cell:hover{transform:scale(1.06)}
-  .cell.free{box-shadow:0 0 0 2px rgba(91,140,255,.35) inset}
+  .cell.free{background:rgba(91,140,255,.30); border-color:var(--accent); box-shadow:0 0 8px rgba(91,140,255,.6)}
   .cell.given{border-color:#fff; box-shadow:0 0 0 2px rgba(255,255,255,.3) inset; cursor:not-allowed}
   .cell.hint{border-color:var(--hint); box-shadow:0 0 0 2px rgba(255,207,77,.45) inset; cursor:not-allowed}
   .cell.player{border-style:dashed; border-color:rgba(255,255,255,.6)}
@@ -84,7 +84,7 @@
 </style>
 </head>
 <body>
-  <h1>Завдання з підказками <span class="ver">v1.7 · 2026-06-06</span></h1>
+  <h1>Завдання з підказками <span class="ver">v1.8 · 2026-06-06</span></h1>
   <div class="sub">Оберіть рівень → доставте відсутні фігури. Застрягли — тисніть «Підказка». <a class="navlink" href="index.html">← На головну (вільний solver)</a></div>
 
   <div class="layout">
@@ -456,6 +456,8 @@ function solve(startOccupied, startUsed, model, limitNodes, skip){
     if(playerCells.has(i)){ playerCells.delete(i); pendingHint=null; render(); autoCheck(); return; } // клік по клітинці стирає
     if(!activePiece||!placeable(activePiece)||pieceDoneP(activePiece)) activePiece=nextFreePiece();
     if(!activePiece){ setStatus('Усі фігури вже стоять.','info'); return; }
+    const cand=candidateCells();                 // ставити можна лише в підсвічені клітинки
+    if(cand && !cand.has(i)){ setStatus('Сюди ця грань не стане — клікайте по підсвічених клітинках.','err'); return; }
     playerCells.set(i,activePiece);
     if(pieceDoneP(activePiece)){ const f=nextFreePiece(); if(f){ activePiece=f; activeFace=0; } } // авто-перехід
     pendingHint=null; render(); autoCheck();
