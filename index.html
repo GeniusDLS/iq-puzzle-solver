@@ -45,6 +45,7 @@
   .piece.active{border-color:var(--accent); box-shadow:0 0 0 2px rgba(91,140,255,.3)}
   .swatch{width:22px; height:22px; border-radius:50%; border:2px solid rgba(255,255,255,.3)}
   .piece .pid{font-size:12px; font-weight:700}
+  .piece .pname{font-size:9px; color:var(--muted); line-height:1.1; text-align:center}
   .piece .done{font-size:10px; color:var(--ok)}
 
   .faces{display:flex; gap:10px; flex-wrap:wrap; margin-top:6px}
@@ -120,31 +121,23 @@
 /* ===== IQ Puzzler solver core (DOM-free) ===== */
 const ROWS = 5, COLS = 10, NCELLS = ROWS * COLS;
 
-/* 10 physical pieces. Each has `faces`: a list of 2D footprints (one per
-   stable "face-down" resting position of the 3D piece). A footprint is a list
-   of [dr,dc] ball offsets. Faces may have different ball counts. In any
-   solution a piece appears as exactly ONE of its faces.
-
-   NOTE: this geometry is an EXAMPLE set that is internally consistent (the
-   primary faces tile the 5x10 board, and the A/B alternate faces give genuine
-   multi-face solutions). Replace coordinates here to match your physical set. */
+/* 10 physical pieces of the set, captured from photos (top-down footprints).
+   Each has `faces`: the distinct footprints the 3D piece makes when resting on
+   each of its stable faces. Footprints are [dr,dc] ball offsets and may have
+   different ball counts. In any solution a piece appears as exactly ONE face.
+   Every piece has a 5-ball face (10x5 = 50); several also have a 6- or 4-ball
+   face, so full solutions can mix faces while still totalling 50. */
 const PIECES = [
-  // A & B form a "swap pair": A can rest on a 5-ball or 6-ball face, B on a
-  // 5-ball or 4-ball face. (A=5,B=5) and (A=6,B=4) both total 10, so genuinely
-  // different full solutions exist that use different faces. Both tile by
-  // construction, demonstrating the per-piece mutual-exclusion of faces.
-  { id:'A', color:'#e8174a', faces:[ [[0,0],[1,0],[1,1],[1,2],[2,1]],
-                                      [[0,0],[0,1],[1,0],[1,1],[1,2],[2,1]] ] },
-  { id:'B', color:'#ff7f0e', faces:[ [[0,0],[0,1],[0,2],[0,3],[0,4]],
-                                      [[0,0],[0,1],[0,2],[0,3]] ] },
-  { id:'C', color:'#ffd400', faces:[ [[0,0],[0,1],[0,2],[0,3],[1,0]] ] },
-  { id:'D', color:'#2ca02c', faces:[ [[0,0],[0,1],[0,2],[1,2],[1,3]] ] },
-  { id:'E', color:'#17becf', faces:[ [[0,0],[0,1],[0,2],[1,1],[2,1]] ] },
-  { id:'F', color:'#1f77b4', faces:[ [[0,0],[1,0],[1,1],[2,0],[2,1]] ] },
-  { id:'G', color:'#9467bd', faces:[ [[0,0],[0,1],[1,0],[2,0],[2,1]] ] },
-  { id:'H', color:'#e377c2', faces:[ [[0,1],[1,0],[1,1],[1,2],[2,1]] ] },
-  { id:'I', color:'#8c564b', faces:[ [[0,2],[1,1],[1,2],[2,0],[2,1]] ] },
-  { id:'J', color:'#7f7f7f', faces:[ [[0,2],[1,2],[2,0],[2,1],[2,2]] ] },
+  { id:'A', name:'Жовта',     color:'#f5a623', faces:[ [[0,0],[0,1],[0,2],[0,3],[1,3]], [[0,0],[0,1],[1,0],[1,1],[1,2],[1,3]] ] },
+  { id:'B', name:'Помаранчева',color:'#ff6d00', faces:[ [[0,0],[0,1],[0,2],[0,3],[1,1]], [[0,1],[0,3],[1,0],[1,1],[1,2],[1,3]] ] },
+  { id:'C', name:'Рожева',    color:'#ff5dba', faces:[ [[0,0],[0,1],[0,2],[0,3],[1,0],[1,1]], [[0,1],[1,0],[1,1],[1,2],[1,3]] ] },
+  { id:'D', name:'Червона',   color:'#e8174a', faces:[ [[0,0],[0,1],[0,2],[0,3],[1,0]], [[0,0],[0,3],[1,0],[1,1],[1,2],[1,3]] ] },
+  { id:'E', name:'Голуба',    color:'#29b6f6', faces:[ [[0,0],[0,1],[0,2],[0,3],[1,0]], [[0,0],[0,2],[1,0],[1,1],[1,2],[1,3]] ] },
+  { id:'F', name:'Бірюзова',  color:'#1abc9c', faces:[ [[0,2],[1,0],[1,1],[1,2],[1,3]], [[0,0],[0,1],[0,2],[0,3],[1,1],[1,2]] ] },
+  { id:'G', name:'Фіолетова', color:'#8e44ad', faces:[ [[0,0],[0,1],[0,2],[1,1],[1,2]], [[0,0],[1,0],[1,1],[1,2]] ] },
+  { id:'H', name:'Синя',      color:'#2962ff', faces:[ [[0,0],[0,1],[0,2],[1,0],[1,2]], [[0,1],[1,0],[1,1],[1,2]] ] },
+  { id:'I', name:'Салатова',  color:'#a4d233', faces:[ [[0,0],[0,2],[1,0],[1,1],[1,2]], [[0,0],[0,1],[0,2],[1,0]] ] },
+  { id:'J', name:'Зелена',    color:'#2ecc40', faces:[ [[0,0],[0,1],[0,2],[1,0],[1,1]], [[0,1],[1,0],[1,1],[1,2]] ] },
 ];
 
 /* ---- geometry helpers ---- */
@@ -437,8 +430,10 @@ self.onmessage = (e) => {
       const used = [...fixed.values()].includes(p.id);
       const el = document.createElement('div');
       el.className = 'piece' + (p.id===activePiece ? ' active' : '');
+      el.title = p.name || p.id;
       el.innerHTML = `<div class="swatch" style="background:${p.color}"></div>
                       <div class="pid">${p.id}</div>
+                      <div class="pname">${p.name || ''}</div>
                       <div class="done">${used ? '● на полі' : ''}</div>`;
       el.addEventListener('click', () => { activePiece = p.id; activeFace = 0; render(); });
       piecesEl.appendChild(el);
