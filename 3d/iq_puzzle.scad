@@ -14,7 +14,7 @@ part = "demo";           // ["demo","board","all","A","B","C","D","E","F","G","H
 /* [Main dimensions, mm]  — ball diameter measured at 10 mm (1 cm) */
 ball_d     = 10;         // diameter of the balls (measured: 1 cm)
 pitch      = 10;         // centre-to-centre spacing — == ball_d (balls touch)
-neck_ratio = 0.62;       // neck thickness between balls (x ball_d) — keeps prints solid
+neck_ratio = 0.45;       // neck thickness between balls (x ball_d) — keeps prints solid
 vlayer     = 10;         // vertical spacing between stacked layers (== ball_d for a cubic stack)
 
 /* [Board — mould enclosing the 5x10 x 2-layer ball template] */

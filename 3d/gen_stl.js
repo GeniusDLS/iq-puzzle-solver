@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 
 // ---- params (keep in sync with iq_puzzle.scad) ----  ball diameter = 10 mm (1 cm)
-const ball_d=10, pitch=10, vlayer=10, neck_ratio=0.62;
+const ball_d=10, pitch=10, vlayer=10, neck_ratio=0.45;
 // board = a mould enclosing the full 5x10 x 2-layer ball template (gap clearance);
 // the upper ball layer protrudes half a diameter for easy insert/remove.
 const gap=0.4, wall=3, floor=3, push_d=5;   // push_d: bottom push-out hole under each ball
