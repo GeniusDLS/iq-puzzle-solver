@@ -11,14 +11,14 @@
 part = "all";            // ["board","all","A","B","C","D","E","F","G","H","I","J"]
 
 /* [Main dimensions, mm] */
-pitch      = 16;         // centre-to-centre spacing of balls (measure your set!)
-ball_d     = 13.5;       // diameter of the balls on the pieces
-neck_ratio = 0.60;       // neck thickness between balls (x ball_d) — keeps prints solid
-vlayer     = 13.5;       // vertical spacing between stacked layers (for 3D pieces)
+ball_d     = 14;         // diameter of the balls (measure your set!)
+pitch      = 14;         // centre-to-centre spacing — for a ball toy this == ball_d (balls touch)
+neck_ratio = 0.62;       // neck thickness between balls (x ball_d) — keeps prints solid
+vlayer     = 14;         // vertical spacing between stacked layers (== ball_d for a cubic stack)
 
 /* [Board] */
-socket_d     = 14.5;     // socket (dimple) diameter = ball_d + clearance
-socket_depth = 4.5;      // how deep a ball sinks into the board
+socket_d     = 12;       // socket (dimple) diameter — smaller than pitch so sockets don't merge
+socket_depth = 3;        // how deep a ball sinks into the board
 board_under  = 4;        // solid material below the sockets
 board_margin = 6;        // flat border around the grid
 ROWS = 5;
@@ -32,21 +32,22 @@ $fn = 48;
 
 // ---------------------------------------------------------------------
 //  Piece data.  Each ball = [col, row, layer]  (layer 0 = bottom).
-//  NOTE: these are FLAT, single-layer footprints (the 5-ball face of each
-//  piece) — they already tile the 5x10 board. To match the REAL 3-D pieces
-//  of the physical set, add the upper-layer balls (layer 1, ...) per piece.
+//  These are the real 3-D shapes, reconstructed from the two orthogonal
+//  projections (faces) of each piece: face 1 = top view (col,row),
+//  face 2 = front view (col,layer). A piece occupies (x,y,z) iff (x,y) is in
+//  the top view and (x,z) is in the front view. Both projections verified.
 // ---------------------------------------------------------------------
 pieces = [
-  ["A", [[0,0,0],[1,0,0],[2,0,0],[3,0,0],[3,1,0]]],
-  ["B", [[0,0,0],[1,0,0],[2,0,0],[3,0,0],[1,1,0]]],
-  ["C", [[1,0,0],[0,1,0],[1,1,0],[2,1,0],[3,1,0]]],
-  ["D", [[0,0,0],[1,0,0],[2,0,0],[3,0,0],[0,1,0]]],
-  ["E", [[0,0,0],[1,0,0],[2,0,0],[3,0,0],[0,1,0]]],
-  ["F", [[2,0,0],[0,1,0],[1,1,0],[2,1,0],[3,1,0]]],
-  ["G", [[0,0,0],[1,0,0],[2,0,0],[1,1,0],[2,1,0]]],
-  ["H", [[0,0,0],[1,0,0],[2,0,0],[0,1,0],[2,1,0]]],
-  ["I", [[0,0,0],[2,0,0],[0,1,0],[1,1,0],[2,1,0]]],
-  ["J", [[0,0,0],[1,0,0],[2,0,0],[0,1,0],[1,1,0]]],
+  ["A", [[0,0,0],[0,0,1],[1,0,0],[1,0,1],[2,0,1],[3,0,1],[3,1,1]]],
+  ["B", [[0,0,1],[1,0,0],[1,0,1],[1,1,0],[1,1,1],[2,0,1],[3,0,0],[3,0,1]]],
+  ["C", [[0,0,1],[0,1,1],[1,0,0],[1,0,1],[1,1,0],[1,1,1],[2,0,1],[3,0,1]]],
+  ["D", [[0,0,0],[0,0,1],[0,1,0],[0,1,1],[1,0,1],[2,0,1],[3,0,0],[3,0,1]]],
+  ["E", [[0,0,0],[0,0,1],[0,1,0],[0,1,1],[1,0,1],[2,0,0],[2,0,1],[3,0,1]]],
+  ["F", [[2,0,0],[2,0,1],[2,1,0],[2,1,1],[0,1,0],[1,1,0],[1,1,1],[3,1,0]]],
+  ["G", [[0,0,0],[0,0,1],[1,0,1],[1,1,1],[2,0,1],[2,1,1]]],
+  ["H", [[0,0,1],[0,1,1],[1,0,0],[1,0,1],[2,0,1],[2,1,1]]],
+  ["I", [[0,0,0],[0,0,1],[0,1,0],[0,1,1],[2,0,0],[2,1,0],[1,1,0]]],
+  ["J", [[0,0,1],[0,1,1],[1,0,0],[1,0,1],[1,1,0],[1,1,1],[2,0,1]]],
 ];
 
 // ---- helpers ----
