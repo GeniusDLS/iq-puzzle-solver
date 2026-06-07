@@ -6,7 +6,7 @@ const path = require('path');
 
 // ---- params (keep in sync with iq_puzzle.scad) ----  ball diameter = 10 mm (1 cm)
 const ball_d=10, pitch=10, vlayer=10, neck_ratio=0.62;
-const socket_d=8, socket_depth=2.5, board_under=3, board_margin=5;
+const hole_d=8, board_thick=4, board_margin=5;   // board with through-holes
 const ROWS=5, COLS=10;
 const SEG=18;           // sphere/cylinder tessellation
 
@@ -61,35 +61,66 @@ function pieceTris(balls){
 }
 
 function boardTris(){
-  const tris=[]; const R=socket_d/2, top=board_under+socket_depth;
-  const centers=[]; for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++) centers.push([c*pitch,-r*pitch]);
-  const edge=R+board_margin;
+  // Flat plate of thickness T with cylindrical THROUGH-holes at every grid point.
+  // Watertight: cap faces are fanned per grid-cell; hole-edge arcs use the same
+  // 15-degree samples as the hole-wall cylinders, so all vertices coincide.
+  const tris=[]; const T=board_thick, rh=hole_d/2, SEGQ=6;
+  const edge=rh+board_margin;
   const x0=-edge, x1=(COLS-1)*pitch+edge, y0=-(ROWS-1)*pitch-edge, y1=edge;
-  const step=1.0;
-  const nx=Math.ceil((x1-x0)/step), ny=Math.ceil((y1-y0)/step);
-  const zc=top+(R-socket_depth);
-  const Z=(x,y)=>{ let z=top; for(const [cx,cy] of centers){ const d2=(x-cx)**2+(y-cy)**2;
-    if(d2<R*R){ const zz=zc-Math.sqrt(R*R-d2); if(zz<z) z=zz; } } return z; };
-  const X=i=>x0+(x1-x0)*i/nx, Y=j=>y0+(y1-y0)*j/ny;
-  // top surface
-  for(let i=0;i<nx;i++)for(let j=0;j<ny;j++){
-    const a=[X(i),Y(j),Z(X(i),Y(j))], b=[X(i+1),Y(j),Z(X(i+1),Y(j))],
-          c=[X(i+1),Y(j+1),Z(X(i+1),Y(j+1))], d=[X(i),Y(j+1),Z(X(i),Y(j+1))];
-    tris.push([a,b,c]); tris.push([a,c,d]);
+  const holeX=[], holeY=[];
+  for(let c=0;c<COLS;c++) holeX.push(c*pitch);
+  for(let r=0;r<ROWS;r++) holeY.push(-r*pitch);
+  const key=v=>Math.round(v*1000);
+  const HX=new Set(holeX.map(key)), HY=new Set(holeY.map(key));
+  const isHole=(x,y)=>HX.has(key(x))&&HY.has(key(y));
+  const uniq=a=>[...new Set(a.map(key))].map(k=>k/1000).sort((p,q)=>p-q);
+  const xs=uniq([x0,...holeX,x1]), ys=uniq([y0,...holeY,y1]);
+
+  // boundary polygon (CCW) of one cell, inserting quarter-arcs at hole corners
+  function cellPoly(xa,xb,ya,yb){
+    const corners=[ // [x,y, inDir, outDir]
+      [xa,ya,[0,-1],[1,0]], [xb,ya,[1,0],[0,1]],
+      [xb,yb,[0,1],[-1,0]], [xa,yb,[-1,0],[0,-1]],
+    ];
+    const pts=[];
+    for(const [x,y,inD,outD] of corners){
+      if(isHole(x,y)){
+        const u1=[-inD[0],-inD[1]], u2=[outD[0],outD[1]];
+        let a1=Math.atan2(u1[1],u1[0]), a2=Math.atan2(u2[1],u2[0]);
+        if(a2-a1> Math.PI) a2-=2*Math.PI; if(a2-a1<-Math.PI) a2+=2*Math.PI;
+        for(let s=0;s<=SEGQ;s++){ const a=a1+(a2-a1)*s/SEGQ; pts.push([x+rh*Math.cos(a), y+rh*Math.sin(a)]); }
+      } else pts.push([x,y]);
+    }
+    return pts;
   }
-  // bottom (flat)
-  const A=[x0,y0,0],B=[x1,y0,0],C=[x1,y1,0],D=[x0,y1,0];
-  tris.push([A,C,B]); tris.push([A,D,C]);
-  // walls
-  for(let i=0;i<nx;i++){ // front/back (y0,y1)
-    const xa=X(i),xb=X(i+1);
-    tris.push([[xa,y0,0],[xb,y0,0],[xb,y0,Z(xb,y0)]]); tris.push([[xa,y0,0],[xb,y0,Z(xb,y0)],[xa,y0,Z(xa,y0)]]);
-    tris.push([[xa,y1,0],[xb,y1,Z(xb,y1)],[xb,y1,0]]); tris.push([[xa,y1,0],[xa,y1,Z(xa,y1)],[xb,y1,Z(xb,y1)]]);
+  // caps
+  for(let i=0;i<xs.length-1;i++) for(let j=0;j<ys.length-1;j++){
+    const xa=xs[i],xb=xs[i+1],ya=ys[j],yb=ys[j+1];
+    const poly=cellPoly(xa,xb,ya,yb);
+    const cx=(xa+xb)/2, cy=(ya+yb)/2, n=poly.length;
+    for(let k=0;k<n;k++){ const p=poly[k], q=poly[(k+1)%n];
+      tris.push([[cx,cy,T],[p[0],p[1],T],[q[0],q[1],T]]);   // top  (+z)
+      tris.push([[cx,cy,0],[q[0],q[1],0],[p[0],p[1],0]]);   // bottom (-z)
+    }
   }
-  for(let j=0;j<ny;j++){ // left/right (x0,x1)
-    const ya=Y(j),yb=Y(j+1);
-    tris.push([[x0,ya,0],[x0,yb,Z(x0,yb)],[x0,yb,0]]); tris.push([[x0,ya,0],[x0,ya,Z(x0,ya)],[x0,yb,Z(x0,yb)]]);
-    tris.push([[x1,ya,0],[x1,yb,0],[x1,yb,Z(x1,yb)]]); tris.push([[x1,ya,0],[x1,yb,Z(x1,yb)],[x1,ya,Z(x1,ya)]]);
+  // hole walls (full cylinders, 24 segments at 15 deg — matches the cap arcs)
+  const SEG=4*SEGQ;
+  for(const hx of holeX) for(const hy of holeY){
+    for(let k=0;k<SEG;k++){
+      const a=2*Math.PI*k/SEG, b=2*Math.PI*(k+1)/SEG;
+      const a0=[hx+rh*Math.cos(a),hy+rh*Math.sin(a),0], aT=[hx+rh*Math.cos(a),hy+rh*Math.sin(a),T];
+      const b0=[hx+rh*Math.cos(b),hy+rh*Math.sin(b),0], bT=[hx+rh*Math.cos(b),hy+rh*Math.sin(b),T];
+      tris.push([a0,aT,bT]); tris.push([a0,bT,b0]);          // inward-facing
+    }
+  }
+  // outer side walls — subdivided at the same grid lines as the caps (no T-junctions)
+  for(let i=0;i<xs.length-1;i++){ const xa=xs[i],xb=xs[i+1];
+    tris.push([[xa,y0,0],[xb,y0,0],[xb,y0,T]]); tris.push([[xa,y0,0],[xb,y0,T],[xa,y0,T]]); // y0 (-y)
+    tris.push([[xb,y1,0],[xa,y1,0],[xa,y1,T]]); tris.push([[xb,y1,0],[xa,y1,T],[xb,y1,T]]); // y1 (+y)
+  }
+  for(let j=0;j<ys.length-1;j++){ const ya=ys[j],yb=ys[j+1];
+    tris.push([[x0,yb,0],[x0,ya,0],[x0,ya,T]]); tris.push([[x0,yb,0],[x0,ya,T],[x0,yb,T]]); // x0 (-x)
+    tris.push([[x1,ya,0],[x1,yb,0],[x1,yb,T]]); tris.push([[x1,ya,0],[x1,yb,T],[x1,ya,T]]); // x1 (+x)
   }
   return tris;
 }

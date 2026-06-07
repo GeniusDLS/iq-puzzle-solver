@@ -16,10 +16,10 @@ pitch      = 10;         // centre-to-centre spacing — == ball_d (balls touch)
 neck_ratio = 0.62;       // neck thickness between balls (x ball_d) — keeps prints solid
 vlayer     = 10;         // vertical spacing between stacked layers (== ball_d for a cubic stack)
 
-/* [Board] */
-socket_d     = 8;        // socket (dimple) diameter — smaller than pitch so sockets don't merge
-socket_depth = 2.5;      // how deep a ball sinks into the board
-board_under  = 3;        // solid material below the sockets
+/* [Board] — through-holes; the ball drops in and is held by the smaller hole */
+hole_d       = 8;        // through-hole diameter (< pitch and < ball_d so the ball seats)
+board_thick  = 4;        // plate thickness
+seat_chamfer = 1;        // top countersink so the ball seats nicely (0 = none)
 board_margin = 5;        // flat border around the grid
 ROWS = 5;
 COLS = 10;
@@ -79,16 +79,19 @@ module piece(balls){
 }
 
 module board(){
-  edge   = socket_d/2 + board_margin;
+  edge   = hole_d/2 + board_margin;
   bx     = (COLS-1)*pitch + 2*edge;
   by     = (ROWS-1)*pitch + 2*edge;
-  top_z  = board_under + socket_depth;
   difference(){
-    translate([-edge, -(ROWS-1)*pitch - edge, 0]) cube([bx, by, top_z]);
+    translate([-edge, -(ROWS-1)*pitch - edge, 0]) cube([bx, by, board_thick]);
     for (r = [0:ROWS-1])
-      for (c = [0:COLS-1])
-        translate([c*pitch, -r*pitch, top_z + (socket_d/2 - socket_depth)])
-          sphere(d = socket_d);
+      for (c = [0:COLS-1]){
+        translate([c*pitch, -r*pitch, -1])
+          cylinder(h = board_thick + 2, d = hole_d, $fn = 32);          // through-hole
+        if (seat_chamfer > 0)
+          translate([c*pitch, -r*pitch, board_thick - seat_chamfer])
+            cylinder(h = seat_chamfer + 0.01, d1 = hole_d, d2 = hole_d + 2*seat_chamfer, $fn = 32);
+      }
   }
 }
 
