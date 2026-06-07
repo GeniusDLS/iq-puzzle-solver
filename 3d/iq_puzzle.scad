@@ -83,20 +83,19 @@ function z_bottom() = floor + ball_d/2 + gap;   // bottom-layer ball centre
 function z_top()    = z_bottom() + vlayer;      // top-layer ball centre
 function board_H()  = z_top();                  // board top = top centre (upper balls protrude)
 
-// The full 5x10 x 2-layer ball template (balls + necks in x/y/z), radius-inflated.
-module ball_template(extra){
-  cr = ball_d/2 + extra; nr = ball_d*neck_ratio/2 + extra;
-  for (l=[0:1]) for (r=[0:ROWS-1]) for (c=[0:COLS-1])
-    translate([c*pitch, -r*pitch, z_bottom()+l*vlayer]) sphere(r=cr);
-  for (l=[0:1]) for (r=[0:ROWS-1]) for (c=[0:COLS-2])               // x necks
-    hull(){ translate([c*pitch,-r*pitch,z_bottom()+l*vlayer]) sphere(r=nr);
-            translate([(c+1)*pitch,-r*pitch,z_bottom()+l*vlayer]) sphere(r=nr); }
-  for (l=[0:1]) for (r=[0:ROWS-2]) for (c=[0:COLS-1])               // y necks
-    hull(){ translate([c*pitch,-r*pitch,z_bottom()+l*vlayer]) sphere(r=nr);
-            translate([c*pitch,-(r+1)*pitch,z_bottom()+l*vlayer]) sphere(r=nr); }
-  for (r=[0:ROWS-1]) for (c=[0:COLS-1])                             // z necks
-    hull(){ translate([c*pitch,-r*pitch,z_bottom()]) sphere(r=nr);
-            translate([c*pitch,-r*pitch,z_top()]) sphere(r=nr); }
+// Cavity insertable from the top: per-column wells (rounded bottom + cylinder up
+// to the open top) joined by full-height slots so the piece's necks slide down.
+module mould_cavity(){
+  cr = ball_d/2 + gap; nr = ball_d*neck_ratio/2 + gap;
+  H  = board_H(); zb = z_bottom();
+  for (r=[0:ROWS-1]) for (c=[0:COLS-1]){
+    translate([c*pitch, -r*pitch, zb]) sphere(r=cr);                         // dimple bottom
+    translate([c*pitch, -r*pitch, zb]) cylinder(h=H-zb+1, r=cr, $fn=40);     // well to the top
+  }
+  for (r=[0:ROWS-1]) for (c=[0:COLS-2])                                      // x neck slots
+    translate([c*pitch, -r*pitch-nr, zb]) cube([pitch, 2*nr, H-zb+1]);
+  for (r=[0:ROWS-2]) for (c=[0:COLS-1])                                      // y neck slots
+    translate([c*pitch-nr, -(r+1)*pitch, zb]) cube([2*nr, pitch, H-zb+1]);
 }
 
 module board(){
@@ -104,7 +103,7 @@ module board(){
   bx=(COLS-1)*pitch+2*edge; by=(ROWS-1)*pitch+2*edge;
   difference(){
     translate([-edge, -(ROWS-1)*pitch-edge, 0]) cube([bx, by, H]);
-    ball_template(gap);     // hollow it out: template + gap clearance
+    mould_cavity();         // hollow it out (wells + full-height neck slots)
     if (push_d > 0)         // push-out holes in the floor under each ball
       for (r=[0:ROWS-1]) for (c=[0:COLS-1])
         translate([c*pitch, -r*pitch, -1]) cylinder(h=z_bottom()+1, d=push_d, $fn=24);

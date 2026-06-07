@@ -73,22 +73,21 @@ function boardTris(){
   const zc=l=>z_b+l*vlayer;
   const edge=R+gap+wall;
   const x0=-edge, x1=(COLS-1)*pitch+edge, y0=-(ROWS-1)*pitch-edge, y1=edge;
+  // Cavity must be insertable from the top: each grid column is a full-height
+  // well (spherical bottom + cylinder up to the open top) and adjacent wells are
+  // joined by full-height slots so the piece's necks can slide straight down.
   function inCavity(x,y,z){
-    const ci=Math.round(x/pitch), ri=Math.round(-y/pitch);     // nearest grid cell
-    for(let l=0;l<2;l++) for(let dc=-1;dc<=1;dc++) for(let dr=-1;dr<=1;dr++){
+    const ci=Math.round(x/pitch), ri=Math.round(-y/pitch);
+    for(let dc=-1;dc<=1;dc++) for(let dr=-1;dr<=1;dr++){
       const c=ci+dc, r=ri+dr; if(c<0||c>=COLS||r<0||r>=ROWS) continue;
-      const Cx=c*pitch, Cy=-r*pitch, Cz=zc(l);
-      if((x-Cx)**2+(y-Cy)**2+(z-Cz)**2<cr2) return true;       // ball cavity
-      if(push_d>0 && l===0 && z<zc(0) && (x-Cx)**2+(y-Cy)**2<push_r2) return true; // floor push-out hole
-      // necks from this centre to +x, +y (same layer) and to the other layer
-      const nb=[];
-      if(c<COLS-1) nb.push([(c+1)*pitch,Cy,Cz]);
-      if(r<ROWS-1) nb.push([Cx,-(r+1)*pitch,Cz]);
-      if(l===0)    nb.push([Cx,Cy,zc(1)]);
-      for(const q of nb){ const abx=q[0]-Cx,aby=q[1]-Cy,abz=q[2]-Cz;
-        const apx=x-Cx,apy=y-Cy,apz=z-Cz; let t=(apx*abx+apy*aby+apz*abz)/(abx*abx+aby*aby+abz*abz);
-        t=t<0?0:t>1?1:t; const ex=apx-t*abx,ey=apy-t*aby,ez=apz-t*abz;
-        if(ex*ex+ey*ey+ez*ez<nr2) return true; }                // neck channel
+      const Cx=c*pitch, Cy=-r*pitch, d2=(x-Cx)**2+(y-Cy)**2;
+      if(z>=z_b && d2<cr2) return true;                  // well (cylinder up to top)
+      if(d2+(z-z_b)**2<cr2) return true;                 // rounded dimple bottom
+      if(push_d>0 && z<z_b && d2<push_r2) return true;   // floor push-out hole
+      if(z>=z_b){                                        // full-height neck slots
+        if(c<COLS-1 && x>Cx && x<Cx+pitch && Math.abs(y-Cy)<nr) return true; // x slot
+        if(r<ROWS-1 && y<Cy && y>Cy-pitch && Math.abs(x-Cx)<nr) return true; // y slot
+      }
     }
     return false;
   }
