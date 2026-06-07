@@ -5,10 +5,11 @@
 // =====================================================================
 
 /* [What to render] */
-// "board"  -> the base plate with sockets
+// "demo"   -> board + piece A resting in it (to check the fit)
+// "board"  -> the base plate only
 // "all"    -> every piece laid out in a grid (for printing them together)
 // "A".."J" -> a single piece by id
-part = "all";            // ["board","all","A","B","C","D","E","F","G","H","I","J"]
+part = "demo";           // ["demo","board","all","A","B","C","D","E","F","G","H","I","J"]
 
 /* [Main dimensions, mm]  — ball diameter measured at 10 mm (1 cm) */
 ball_d     = 10;         // diameter of the balls (measured: 1 cm)
@@ -16,13 +17,10 @@ pitch      = 10;         // centre-to-centre spacing — == ball_d (balls touch)
 neck_ratio = 0.62;       // neck thickness between balls (x ball_d) — keeps prints solid
 vlayer     = 10;         // vertical spacing between stacked layers (== ball_d for a cubic stack)
 
-/* [Board — two levels + neck channels] */
-upper_h      = 0.5*ball_d;   // TOP level height: ball (and its neck) pass through
-lower_h      = 1.0*ball_d;   // BOTTOM level height: the ball stops here
-lower_d      = 8;            // bottom hole diameter (< ball_d so the ball rests on the step)
-ball_clear   = 0.6;          // radial clearance so the ball slides through the upper level
-neck_clear   = 0.8;          // clearance around the neck channels
-board_margin = 5;            // flat border around the grid
+/* [Board — mould enclosing the 5x10 x 2-layer ball template] */
+gap   = 0.3;   // clearance around the template (free passage of pieces)
+wall  = 3;     // side wall thickness
+floor = 3;     // floor thickness under the bottom ball layer
 ROWS = 5;
 COLS = 10;
 
@@ -80,27 +78,32 @@ module piece(balls){
     piece_solid(balls);
 }
 
+function z_bottom() = floor + ball_d/2 + gap;   // bottom-layer ball centre
+function z_top()    = z_bottom() + vlayer;      // top-layer ball centre
+function board_H()  = z_top();                  // board top = top centre (upper balls protrude)
+
+// The full 5x10 x 2-layer ball template (balls + necks in x/y/z), radius-inflated.
+module ball_template(extra){
+  cr = ball_d/2 + extra; nr = ball_d*neck_ratio/2 + extra;
+  for (l=[0:1]) for (r=[0:ROWS-1]) for (c=[0:COLS-1])
+    translate([c*pitch, -r*pitch, z_bottom()+l*vlayer]) sphere(r=cr);
+  for (l=[0:1]) for (r=[0:ROWS-1]) for (c=[0:COLS-2])               // x necks
+    hull(){ translate([c*pitch,-r*pitch,z_bottom()+l*vlayer]) sphere(r=nr);
+            translate([(c+1)*pitch,-r*pitch,z_bottom()+l*vlayer]) sphere(r=nr); }
+  for (l=[0:1]) for (r=[0:ROWS-2]) for (c=[0:COLS-1])               // y necks
+    hull(){ translate([c*pitch,-r*pitch,z_bottom()+l*vlayer]) sphere(r=nr);
+            translate([c*pitch,-(r+1)*pitch,z_bottom()+l*vlayer]) sphere(r=nr); }
+  for (r=[0:ROWS-1]) for (c=[0:COLS-1])                             // z necks
+    hull(){ translate([c*pitch,-r*pitch,z_bottom()]) sphere(r=nr);
+            translate([c*pitch,-r*pitch,z_top()]) sphere(r=nr); }
+}
+
 module board(){
-  upper_d = ball_d + 2*ball_clear;             // top hole — ball passes through
-  neck_w  = ball_d*neck_ratio + 2*neck_clear;  // neck channel width
-  H       = upper_h + lower_h;
-  edge    = upper_d/2 + board_margin;
-  bx      = (COLS-1)*pitch + 2*edge;
-  by      = (ROWS-1)*pitch + 2*edge;
-  slot_z0 = lower_h - 1;                        // start a touch below the step to clear the neck
+  H=board_H(); edge=ball_d/2+gap+wall;
+  bx=(COLS-1)*pitch+2*edge; by=(ROWS-1)*pitch+2*edge;
   difference(){
-    translate([-edge, -(ROWS-1)*pitch - edge, 0]) cube([bx, by, H]);
-    // bottom narrow through-holes (ball rests on the step above them)
-    for (r=[0:ROWS-1]) for (c=[0:COLS-1])
-      translate([c*pitch, -r*pitch, -1]) cylinder(h=H+2, d=lower_d, $fn=32);
-    // top wide holes (upper level only) — ball passes through these
-    for (r=[0:ROWS-1]) for (c=[0:COLS-1])
-      translate([c*pitch, -r*pitch, lower_h]) cylinder(h=upper_h+1, d=upper_d, $fn=32);
-    // neck channels in the upper level, connecting adjacent holes (X then Y)
-    for (r=[0:ROWS-1]) for (c=[0:COLS-2])
-      translate([c*pitch, -r*pitch - neck_w/2, slot_z0]) cube([pitch, neck_w, H-slot_z0+1]);
-    for (r=[0:ROWS-2]) for (c=[0:COLS-1])
-      translate([c*pitch - neck_w/2, -(r+1)*pitch, slot_z0]) cube([neck_w, pitch, H-slot_z0+1]);
+    translate([-edge, -(ROWS-1)*pitch-edge, 0]) cube([bx, by, H]);
+    ball_template(gap);     // hollow it out: template + gap clearance
   }
 }
 
@@ -109,20 +112,38 @@ function pcols(balls) = max([for (b = balls) b[0]]) + 1;
 function prows(balls) = max([for (b = balls) b[1]]) + 1;
 
 module all_pieces(){
-  gap = pitch;                 // space between pieces
-  x = 0;
-  // simple shelf layout: 5 per row
+  sp = pitch;                  // space between pieces
   for (i = [0:len(pieces)-1]) {
     col = i % 5;
     row = floor(i / 5);
-    translate([ col * (5*pitch + gap), -row * (3*pitch + gap), 0 ])
+    translate([ col * (5*pitch + sp), -row * (3*pitch + sp), 0 ])
       piece(pieces[i][1]);
   }
+}
+
+// absolute position of ball b of a piece dropped into the mould at grid (oc,or_)
+function mpos(b, oc, or_) = [ (oc+b[0])*pitch, -(or_+b[1])*pitch, z_bottom()+b[2]*vlayer ];
+
+// Place a piece inside the mould in its natural grid orientation.
+module place_in_mould(balls, oc, or_, col){
+  color(col) union(){
+    for (b = balls) translate(mpos(b,oc,or_)) sphere(d = ball_d);
+    for (i=[0:len(balls)-1]) for (j=[i+1:len(balls)-1])
+      if (adjacent(balls[i],balls[j]))
+        hull(){ translate(mpos(balls[i],oc,or_)) sphere(d=ball_d*neck_ratio);
+                translate(mpos(balls[j],oc,or_)) sphere(d=ball_d*neck_ratio); }
+  }
+}
+
+module demo(){
+  %board();                                      // ghost so the piece shows through
+  place_in_mould(pieces[0][1], 3, 1, "#f5a623"); // piece A dropped into the mould
 }
 
 module render_part(){
   if (part == "board")      board();
   else if (part == "all")   all_pieces();
+  else if (part == "demo")  demo();
   else {
     found = [for (p = pieces) if (p[0] == part) p];
     if (len(found) > 0) piece(found[0][1]);

@@ -1,12 +1,16 @@
 // Generate binary STL files for the board and all pieces — no deps, no OpenSCAD.
 // Pieces = overlapping closed spheres + neck cylinders (slicers union them).
-// Board  = watertight slab with spherical dimples (heightfield top + walls + bottom).
+// Board  = mould enclosing the full 5x10 x 2-layer ball template (gap clearance),
+//          meshed by greedy voxel-surface extraction (slicer-friendly).
 const fs = require('fs');
 const path = require('path');
 
 // ---- params (keep in sync with iq_puzzle.scad) ----  ball diameter = 10 mm (1 cm)
 const ball_d=10, pitch=10, vlayer=10, neck_ratio=0.62;
-const hole_d=8, board_thick=4, board_margin=5;   // board with through-holes
+// board = a mould enclosing the full 5x10 x 2-layer ball template (gap clearance);
+// the upper ball layer protrudes half a diameter for easy insert/remove.
+const gap=0.3, wall=3, floor=3;
+const VOX=0.4;   // voxel size for the board mesh (smaller = smoother, bigger file)
 const ROWS=5, COLS=10;
 const SEG=18;           // sphere/cylinder tessellation
 
@@ -61,66 +65,68 @@ function pieceTris(balls){
 }
 
 function boardTris(){
-  // Flat plate of thickness T with cylindrical THROUGH-holes at every grid point.
-  // Watertight: cap faces are fanned per grid-cell; hole-edge arcs use the same
-  // 15-degree samples as the hole-wall cylinders, so all vertices coincide.
-  const tris=[]; const T=board_thick, rh=hole_d/2, SEGQ=6;
-  const edge=rh+board_margin;
+  // Mould enclosing the full 5x10 x 2-layer ball template (spheres + necks in
+  // x/y/z) with `gap` clearance; open at the top so the upper balls protrude.
+  // Meshed by voxel-surface extraction (robust for arbitrary CSG).
+  const R=ball_d/2, cr=R+gap, nr=ball_d*neck_ratio/2+gap, cr2=cr*cr, nr2=nr*nr;
+  const z_b=floor+R+gap, z_t=z_b+vlayer, H=z_t;          // top at upper-layer centre
+  const zc=l=>z_b+l*vlayer;
+  const edge=R+gap+wall;
   const x0=-edge, x1=(COLS-1)*pitch+edge, y0=-(ROWS-1)*pitch-edge, y1=edge;
-  const holeX=[], holeY=[];
-  for(let c=0;c<COLS;c++) holeX.push(c*pitch);
-  for(let r=0;r<ROWS;r++) holeY.push(-r*pitch);
-  const key=v=>Math.round(v*1000);
-  const HX=new Set(holeX.map(key)), HY=new Set(holeY.map(key));
-  const isHole=(x,y)=>HX.has(key(x))&&HY.has(key(y));
-  const uniq=a=>[...new Set(a.map(key))].map(k=>k/1000).sort((p,q)=>p-q);
-  const xs=uniq([x0,...holeX,x1]), ys=uniq([y0,...holeY,y1]);
-
-  // boundary polygon (CCW) of one cell, inserting quarter-arcs at hole corners
-  function cellPoly(xa,xb,ya,yb){
-    const corners=[ // [x,y, inDir, outDir]
-      [xa,ya,[0,-1],[1,0]], [xb,ya,[1,0],[0,1]],
-      [xb,yb,[0,1],[-1,0]], [xa,yb,[-1,0],[0,-1]],
-    ];
-    const pts=[];
-    for(const [x,y,inD,outD] of corners){
-      if(isHole(x,y)){
-        const u1=[-inD[0],-inD[1]], u2=[outD[0],outD[1]];
-        let a1=Math.atan2(u1[1],u1[0]), a2=Math.atan2(u2[1],u2[0]);
-        if(a2-a1> Math.PI) a2-=2*Math.PI; if(a2-a1<-Math.PI) a2+=2*Math.PI;
-        for(let s=0;s<=SEGQ;s++){ const a=a1+(a2-a1)*s/SEGQ; pts.push([x+rh*Math.cos(a), y+rh*Math.sin(a)]); }
-      } else pts.push([x,y]);
+  function inCavity(x,y,z){
+    const ci=Math.round(x/pitch), ri=Math.round(-y/pitch);     // nearest grid cell
+    for(let l=0;l<2;l++) for(let dc=-1;dc<=1;dc++) for(let dr=-1;dr<=1;dr++){
+      const c=ci+dc, r=ri+dr; if(c<0||c>=COLS||r<0||r>=ROWS) continue;
+      const Cx=c*pitch, Cy=-r*pitch, Cz=zc(l);
+      if((x-Cx)**2+(y-Cy)**2+(z-Cz)**2<cr2) return true;       // ball cavity
+      // necks from this centre to +x, +y (same layer) and to the other layer
+      const nb=[];
+      if(c<COLS-1) nb.push([(c+1)*pitch,Cy,Cz]);
+      if(r<ROWS-1) nb.push([Cx,-(r+1)*pitch,Cz]);
+      if(l===0)    nb.push([Cx,Cy,zc(1)]);
+      for(const q of nb){ const abx=q[0]-Cx,aby=q[1]-Cy,abz=q[2]-Cz;
+        const apx=x-Cx,apy=y-Cy,apz=z-Cz; let t=(apx*abx+apy*aby+apz*abz)/(abx*abx+aby*aby+abz*abz);
+        t=t<0?0:t>1?1:t; const ex=apx-t*abx,ey=apy-t*aby,ez=apz-t*abz;
+        if(ex*ex+ey*ey+ez*ez<nr2) return true; }                // neck channel
     }
-    return pts;
+    return false;
   }
-  // caps
-  for(let i=0;i<xs.length-1;i++) for(let j=0;j<ys.length-1;j++){
-    const xa=xs[i],xb=xs[i+1],ya=ys[j],yb=ys[j+1];
-    const poly=cellPoly(xa,xb,ya,yb);
-    const cx=(xa+xb)/2, cy=(ya+yb)/2, n=poly.length;
-    for(let k=0;k<n;k++){ const p=poly[k], q=poly[(k+1)%n];
-      tris.push([[cx,cy,T],[p[0],p[1],T],[q[0],q[1],T]]);   // top  (+z)
-      tris.push([[cx,cy,0],[q[0],q[1],0],[p[0],p[1],0]]);   // bottom (-z)
+  function inside(x,y,z){ if(x<x0||x>x1||y<y0||y>y1||z<0||z>H) return false; return !inCavity(x,y,z); }
+  const h=VOX, hh=h/2;
+  const nx=Math.ceil((x1-x0)/h)+2, ny=Math.ceil((y1-y0)/h)+2, nz=Math.ceil(H/h)+2;
+  const ox=x0-h, oy=y0-h, oz=-h;
+  const CX=i=>ox+(i+0.5)*h, CY=j=>oy+(j+0.5)*h, CZ=k=>oz+(k+0.5)*h;
+  const field=new Uint8Array(nx*ny*nz), id=(i,j,k)=>(i*ny+j)*nz+k;
+  for(let i=0;i<nx;i++)for(let j=0;j<ny;j++)for(let k=0;k<nz;k++) field[id(i,j,k)]=inside(CX(i),CY(j),CZ(k))?1:0;
+  const tris=[];
+  const dims=[nx,ny,nz], orig=[ox,oy,oz], cell=[0,0,0], nc=[0,0,0];
+  // greedy-mesh boundary faces per axis/sign -> far fewer triangles
+  for(let axis=0;axis<3;axis++){
+    const u=(axis+1)%3, v=(axis+2)%3, W=dims[u], Hd=dims[v];
+    for(let sign=-1;sign<=1;sign+=2){
+      for(let f=0;f<dims[axis];f++){
+        const mask=new Uint8Array(W*Hd);
+        for(let a=0;a<W;a++) for(let b=0;b<Hd;b++){
+          cell[axis]=f; cell[u]=a; cell[v]=b;
+          if(!field[id(cell[0],cell[1],cell[2])]){ mask[a*Hd+b]=0; continue; }
+          const nf=f+sign; let nb=0;
+          if(nf>=0&&nf<dims[axis]){ nc[axis]=nf; nc[u]=a; nc[v]=b; nb=field[id(nc[0],nc[1],nc[2])]; }
+          mask[a*Hd+b]= nb?0:1;
+        }
+        for(let a=0;a<W;a++) for(let b=0;b<Hd;b++){
+          if(!mask[a*Hd+b]) continue;
+          let w=1; while(a+w<W && mask[(a+w)*Hd+b]) w++;
+          let hgt=1; while(b+hgt<Hd){ let ok=true; for(let k=0;k<w;k++) if(!mask[(a+k)*Hd+(b+hgt)]){ok=false;break;} if(!ok)break; hgt++; }
+          for(let dx=0;dx<w;dx++) for(let dy=0;dy<hgt;dy++) mask[(a+dx)*Hd+(b+dy)]=0;
+          const FV=orig[axis]+(f+0.5+0.5*sign)*h;
+          const U0=orig[u]+a*h, U1=orig[u]+(a+w)*h, V0=orig[v]+b*h, V1=orig[v]+(b+hgt)*h;
+          const P=(uu,vv)=>{ const p=[0,0,0]; p[axis]=FV; p[u]=uu; p[v]=vv; return p; };
+          const c00=P(U0,V0),c10=P(U1,V0),c11=P(U1,V1),c01=P(U0,V1);
+          if(sign>0){ tris.push([c00,c10,c11]); tris.push([c00,c11,c01]); }
+          else      { tris.push([c00,c11,c10]); tris.push([c00,c01,c11]); }
+        }
+      }
     }
-  }
-  // hole walls (full cylinders, 24 segments at 15 deg — matches the cap arcs)
-  const SEG=4*SEGQ;
-  for(const hx of holeX) for(const hy of holeY){
-    for(let k=0;k<SEG;k++){
-      const a=2*Math.PI*k/SEG, b=2*Math.PI*(k+1)/SEG;
-      const a0=[hx+rh*Math.cos(a),hy+rh*Math.sin(a),0], aT=[hx+rh*Math.cos(a),hy+rh*Math.sin(a),T];
-      const b0=[hx+rh*Math.cos(b),hy+rh*Math.sin(b),0], bT=[hx+rh*Math.cos(b),hy+rh*Math.sin(b),T];
-      tris.push([a0,aT,bT]); tris.push([a0,bT,b0]);          // inward-facing
-    }
-  }
-  // outer side walls — subdivided at the same grid lines as the caps (no T-junctions)
-  for(let i=0;i<xs.length-1;i++){ const xa=xs[i],xb=xs[i+1];
-    tris.push([[xa,y0,0],[xb,y0,0],[xb,y0,T]]); tris.push([[xa,y0,0],[xb,y0,T],[xa,y0,T]]); // y0 (-y)
-    tris.push([[xb,y1,0],[xa,y1,0],[xa,y1,T]]); tris.push([[xb,y1,0],[xa,y1,T],[xb,y1,T]]); // y1 (+y)
-  }
-  for(let j=0;j<ys.length-1;j++){ const ya=ys[j],yb=ys[j+1];
-    tris.push([[x0,yb,0],[x0,ya,0],[x0,ya,T]]); tris.push([[x0,yb,0],[x0,ya,T],[x0,yb,T]]); // x0 (-x)
-    tris.push([[x1,ya,0],[x1,yb,0],[x1,yb,T]]); tris.push([[x1,ya,0],[x1,yb,T],[x1,ya,T]]); // x1 (+x)
   }
   return tris;
 }
