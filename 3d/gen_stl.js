@@ -1,7 +1,7 @@
 // Generate binary STL files for the board and all pieces — no deps, no OpenSCAD.
 // Pieces = overlapping closed spheres + neck cylinders (slicers union them).
 // Board  = mould enclosing the full 5x10 x 2-layer ball template (gap clearance),
-//          meshed by greedy voxel-surface extraction (slicer-friendly).
+//          meshed smoothly via Surface Nets over an analytic SDF.
 const fs = require('fs');
 const path = require('path');
 
@@ -10,7 +10,7 @@ const ball_d=10, pitch=10, vlayer=10, neck_ratio=0.45;
 // board = a mould enclosing the full 5x10 x 2-layer ball template (gap clearance);
 // the upper ball layer protrudes half a diameter for easy insert/remove.
 const gap=0.4, wall=3, floor=3, push_d=5;   // push_d: bottom push-out hole under each ball
-const VOX=0.4;   // voxel size for the board mesh (smaller = smoother, bigger file)
+const VOX=0.7;   // voxel size for the board mesh (smaller = smoother, bigger file)
 const ROWS=5, COLS=10;
 const SEG=18;           // sphere/cylinder tessellation
 
@@ -65,69 +65,59 @@ function pieceTris(balls){
 }
 
 function boardTris(){
-  // Mould enclosing the full 5x10 x 2-layer ball template (spheres + necks in
-  // x/y/z) with `gap` clearance; open at the top so the upper balls protrude.
-  // Meshed by voxel-surface extraction (robust for arbitrary CSG).
-  const R=ball_d/2, cr=R+gap, nr=ball_d*neck_ratio/2+gap, cr2=cr*cr, nr2=nr*nr, push_r2=(push_d/2)**2;
-  const z_b=floor+R+gap, z_t=z_b+vlayer, H=z_t;          // top at upper-layer centre
-  const zc=l=>z_b+l*vlayer;
+  // Smooth board via Surface Nets over a signed-distance field (analytic
+  // box/cylinder/sphere CSG). Solid = block minus cavity (wells + neck slots +
+  // push holes). SDF gives smooth surfaces even on a coarse grid.
+  const R=ball_d/2, cr=R+gap, nr=ball_d*neck_ratio/2+gap, push_r=push_d/2;
+  const z_b=floor+R+gap, H=z_b+vlayer;
   const edge=R+gap+wall;
   const x0=-edge, x1=(COLS-1)*pitch+edge, y0=-(ROWS-1)*pitch-edge, y1=edge;
-  // Cavity must be insertable from the top: each grid column is a full-height
-  // well (spherical bottom + cylinder up to the open top) and adjacent wells are
-  // joined by full-height slots so the piece's necks can slide straight down.
-  function inCavity(x,y,z){
-    const ci=Math.round(x/pitch), ri=Math.round(-y/pitch);
-    for(let dc=-1;dc<=1;dc++) for(let dr=-1;dr<=1;dr++){
-      const c=ci+dc, r=ri+dr; if(c<0||c>=COLS||r<0||r>=ROWS) continue;
-      const Cx=c*pitch, Cy=-r*pitch, d2=(x-Cx)**2+(y-Cy)**2;
-      if(z>=z_b && d2<cr2) return true;                  // well (cylinder up to top)
-      if(d2+(z-z_b)**2<cr2) return true;                 // rounded dimple bottom
-      if(push_d>0 && z<z_b && d2<push_r2) return true;   // floor push-out hole
-      if(z>=z_b){                                        // full-height neck slots
-        if(c<COLS-1 && x>Cx && x<Cx+pitch && Math.abs(y-Cy)<nr) return true; // x slot
-        if(r<ROWS-1 && y<Cy && y>Cy-pitch && Math.abs(x-Cx)<nr) return true; // y slot
-      }
+  const bcx=(x0+x1)/2, bcy=(y0+y1)/2, hbx=(x1-x0)/2, hby=(y1-y0)/2;
+  const sBox=(px,py,pz,ax,ay,az,hx,hy,hz)=>{ const qx=Math.abs(px-ax)-hx,qy=Math.abs(py-ay)-hy,qz=Math.abs(pz-az)-hz;
+    return Math.hypot(Math.max(qx,0),Math.max(qy,0),Math.max(qz,0))+Math.min(Math.max(qx,qy,qz),0); };
+  const sSph=(px,py,pz,ax,ay,az,r)=>Math.hypot(px-ax,py-ay,pz-az)-r;
+  const sCyl=(px,py,pz,ax,ay,z0,z1,r)=>{ const dxy=Math.hypot(px-ax,py-ay)-r, dz=Math.abs(pz-(z0+z1)/2)-(z1-z0)/2;
+    return Math.hypot(Math.max(dxy,0),Math.max(dz,0))+Math.min(Math.max(dxy,dz),0); };
+  function sdf(x,y,z){
+    const block=sBox(x,y,z,bcx,bcy,H/2,hbx,hby,H/2);
+    let cav=1e9; const ci=Math.round(x/pitch), ri=Math.round(-y/pitch);
+    for(let dc=-1;dc<=1;dc++)for(let dr=-1;dr<=1;dr++){
+      const c=ci+dc,r=ri+dr; if(c<0||c>=COLS||r<0||r>=ROWS) continue;
+      const Cx=c*pitch, Cy=-r*pitch;
+      cav=Math.min(cav, sCyl(x,y,z,Cx,Cy,z_b,H+5,cr));
+      cav=Math.min(cav, sSph(x,y,z,Cx,Cy,z_b,cr));
+      if(push_d>0) cav=Math.min(cav, sCyl(x,y,z,Cx,Cy,-5,z_b,push_r));
+      if(c<COLS-1) cav=Math.min(cav, sBox(x,y,z,Cx+pitch/2,Cy,(z_b+H+5)/2,pitch/2,nr,(H+5-z_b)/2));
+      if(r<ROWS-1) cav=Math.min(cav, sBox(x,y,z,Cx,Cy-pitch/2,(z_b+H+5)/2,nr,pitch/2,(H+5-z_b)/2));
     }
-    return false;
+    return Math.max(block,-cav);
   }
-  function inside(x,y,z){ if(x<x0||x>x1||y<y0||y>y1||z<0||z>H) return false; return !inCavity(x,y,z); }
-  const h=VOX, hh=h/2;
-  const nx=Math.ceil((x1-x0)/h)+2, ny=Math.ceil((y1-y0)/h)+2, nz=Math.ceil(H/h)+2;
-  const ox=x0-h, oy=y0-h, oz=-h;
-  const CX=i=>ox+(i+0.5)*h, CY=j=>oy+(j+0.5)*h, CZ=k=>oz+(k+0.5)*h;
-  const field=new Uint8Array(nx*ny*nz), id=(i,j,k)=>(i*ny+j)*nz+k;
-  for(let i=0;i<nx;i++)for(let j=0;j<ny;j++)for(let k=0;k<nz;k++) field[id(i,j,k)]=inside(CX(i),CY(j),CZ(k))?1:0;
+  const h=VOX, m=2*h, X0=x0-m,Y0=y0-m,Z0=-m, X1=x1+m,Y1=y1+m,Z1=H+m;
+  const Nx=Math.ceil((X1-X0)/h),Ny=Math.ceil((Y1-Y0)/h),Nz=Math.ceil((Z1-Z0)/h);
+  const gy=Ny+1,gz=Nz+1, VX=i=>X0+i*h,VY=j=>Y0+j*h,VZ=k=>Z0+k*h;
+  const f=new Float32Array((Nx+1)*gy*gz), vid=(i,j,k)=>(i*gy+j)*gz+k;
+  for(let i=0;i<=Nx;i++)for(let j=0;j<=Ny;j++)for(let k=0;k<=Nz;k++) f[vid(i,j,k)]=sdf(VX(i),VY(j),VZ(k));
+  const cellV=new Int32Array(Nx*Ny*Nz).fill(-1), cid=(i,j,k)=>(i*Ny+j)*Nz+k, verts=[];
+  const CO=[[0,0,0],[1,0,0],[0,1,0],[1,1,0],[0,0,1],[1,0,1],[0,1,1],[1,1,1]];
+  const EDG=[[0,1],[0,2],[0,4],[1,3],[1,5],[2,3],[2,6],[3,7],[4,5],[4,6],[5,7],[6,7]];
+  for(let i=0;i<Nx;i++)for(let j=0;j<Ny;j++)for(let k=0;k<Nz;k++){
+    const cv=[]; for(const o of CO) cv.push(f[vid(i+o[0],j+o[1],k+o[2])]);
+    let neg=0; for(const v of cv) if(v<0) neg++; if(neg===0||neg===8) continue;
+    let sx=0,sy=0,sz=0,n=0;
+    for(const e of EDG){ const fa=cv[e[0]],fb=cv[e[1]]; if((fa<0)===(fb<0)) continue;
+      const t=fa/(fa-fb), A=CO[e[0]],B=CO[e[1]];
+      sx+=VX(i+A[0]+t*(B[0]-A[0])); sy+=VY(j+A[1]+t*(B[1]-A[1])); sz+=VZ(k+A[2]+t*(B[2]-A[2])); n++; }
+    cellV[cid(i,j,k)]=verts.length; verts.push([sx/n,sy/n,sz/n]);
+  }
   const tris=[];
-  const dims=[nx,ny,nz], orig=[ox,oy,oz], cell=[0,0,0], nc=[0,0,0];
-  // greedy-mesh boundary faces per axis/sign -> far fewer triangles
-  for(let axis=0;axis<3;axis++){
-    const u=(axis+1)%3, v=(axis+2)%3, W=dims[u], Hd=dims[v];
-    for(let sign=-1;sign<=1;sign+=2){
-      for(let f=0;f<dims[axis];f++){
-        const mask=new Uint8Array(W*Hd);
-        for(let a=0;a<W;a++) for(let b=0;b<Hd;b++){
-          cell[axis]=f; cell[u]=a; cell[v]=b;
-          if(!field[id(cell[0],cell[1],cell[2])]){ mask[a*Hd+b]=0; continue; }
-          const nf=f+sign; let nb=0;
-          if(nf>=0&&nf<dims[axis]){ nc[axis]=nf; nc[u]=a; nc[v]=b; nb=field[id(nc[0],nc[1],nc[2])]; }
-          mask[a*Hd+b]= nb?0:1;
-        }
-        for(let a=0;a<W;a++) for(let b=0;b<Hd;b++){
-          if(!mask[a*Hd+b]) continue;
-          let w=1; while(a+w<W && mask[(a+w)*Hd+b]) w++;
-          let hgt=1; while(b+hgt<Hd){ let ok=true; for(let k=0;k<w;k++) if(!mask[(a+k)*Hd+(b+hgt)]){ok=false;break;} if(!ok)break; hgt++; }
-          for(let dx=0;dx<w;dx++) for(let dy=0;dy<hgt;dy++) mask[(a+dx)*Hd+(b+dy)]=0;
-          const FV=orig[axis]+(f+0.5+0.5*sign)*h;
-          const U0=orig[u]+a*h, U1=orig[u]+(a+w)*h, V0=orig[v]+b*h, V1=orig[v]+(b+hgt)*h;
-          const P=(uu,vv)=>{ const p=[0,0,0]; p[axis]=FV; p[u]=uu; p[v]=vv; return p; };
-          const c00=P(U0,V0),c10=P(U1,V0),c11=P(U1,V1),c01=P(U0,V1);
-          if(sign>0){ tris.push([c00,c10,c11]); tris.push([c00,c11,c01]); }
-          else      { tris.push([c00,c11,c10]); tris.push([c00,c01,c11]); }
-        }
-      }
-    }
-  }
+  function quad(a,b,c,d,flip){ if(a<0||b<0||c<0||d<0) return; const A=verts[a],B=verts[b],C=verts[c],D=verts[d];
+    if(!flip){ tris.push([A,B,C]); tris.push([A,C,D]); } else { tris.push([A,C,B]); tris.push([A,D,C]); } }
+  for(let i=1;i<Nx;i++)for(let j=1;j<Ny;j++)for(let k=0;k<Nz;k++){ const s0=f[vid(i,j,k)]<0,s1=f[vid(i,j,k+1)]<0; if(s0===s1)continue;
+    quad(cellV[cid(i-1,j-1,k)],cellV[cid(i,j-1,k)],cellV[cid(i,j,k)],cellV[cid(i-1,j,k)],s0); }
+  for(let i=1;i<Nx;i++)for(let j=0;j<Ny;j++)for(let k=1;k<Nz;k++){ const s0=f[vid(i,j,k)]<0,s1=f[vid(i,j+1,k)]<0; if(s0===s1)continue;
+    quad(cellV[cid(i-1,j,k-1)],cellV[cid(i,j,k-1)],cellV[cid(i,j,k)],cellV[cid(i-1,j,k)],!s0); }
+  for(let i=0;i<Nx;i++)for(let j=1;j<Ny;j++)for(let k=1;k<Nz;k++){ const s0=f[vid(i,j,k)]<0,s1=f[vid(i+1,j,k)]<0; if(s0===s1)continue;
+    quad(cellV[cid(i,j-1,k-1)],cellV[cid(i,j,k-1)],cellV[cid(i,j,k)],cellV[cid(i,j-1,k)],s0); }
   return tris;
 }
 
