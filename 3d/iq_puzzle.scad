@@ -16,11 +16,13 @@ pitch      = 10;         // centre-to-centre spacing — == ball_d (balls touch)
 neck_ratio = 0.62;       // neck thickness between balls (x ball_d) — keeps prints solid
 vlayer     = 10;         // vertical spacing between stacked layers (== ball_d for a cubic stack)
 
-/* [Board] — through-holes; the ball drops in and is held by the smaller hole */
-hole_d       = 8;        // through-hole diameter (< pitch and < ball_d so the ball seats)
-board_thick  = 4;        // plate thickness
-seat_chamfer = 1;        // top countersink so the ball seats nicely (0 = none)
-board_margin = 5;        // flat border around the grid
+/* [Board — two levels + neck channels] */
+upper_h      = 0.5*ball_d;   // TOP level height: ball (and its neck) pass through
+lower_h      = 1.0*ball_d;   // BOTTOM level height: the ball stops here
+lower_d      = 8;            // bottom hole diameter (< ball_d so the ball rests on the step)
+ball_clear   = 0.6;          // radial clearance so the ball slides through the upper level
+neck_clear   = 0.8;          // clearance around the neck channels
+board_margin = 5;            // flat border around the grid
 ROWS = 5;
 COLS = 10;
 
@@ -79,19 +81,26 @@ module piece(balls){
 }
 
 module board(){
-  edge   = hole_d/2 + board_margin;
-  bx     = (COLS-1)*pitch + 2*edge;
-  by     = (ROWS-1)*pitch + 2*edge;
+  upper_d = ball_d + 2*ball_clear;             // top hole — ball passes through
+  neck_w  = ball_d*neck_ratio + 2*neck_clear;  // neck channel width
+  H       = upper_h + lower_h;
+  edge    = upper_d/2 + board_margin;
+  bx      = (COLS-1)*pitch + 2*edge;
+  by      = (ROWS-1)*pitch + 2*edge;
+  slot_z0 = lower_h - 1;                        // start a touch below the step to clear the neck
   difference(){
-    translate([-edge, -(ROWS-1)*pitch - edge, 0]) cube([bx, by, board_thick]);
-    for (r = [0:ROWS-1])
-      for (c = [0:COLS-1]){
-        translate([c*pitch, -r*pitch, -1])
-          cylinder(h = board_thick + 2, d = hole_d, $fn = 32);          // through-hole
-        if (seat_chamfer > 0)
-          translate([c*pitch, -r*pitch, board_thick - seat_chamfer])
-            cylinder(h = seat_chamfer + 0.01, d1 = hole_d, d2 = hole_d + 2*seat_chamfer, $fn = 32);
-      }
+    translate([-edge, -(ROWS-1)*pitch - edge, 0]) cube([bx, by, H]);
+    // bottom narrow through-holes (ball rests on the step above them)
+    for (r=[0:ROWS-1]) for (c=[0:COLS-1])
+      translate([c*pitch, -r*pitch, -1]) cylinder(h=H+2, d=lower_d, $fn=32);
+    // top wide holes (upper level only) — ball passes through these
+    for (r=[0:ROWS-1]) for (c=[0:COLS-1])
+      translate([c*pitch, -r*pitch, lower_h]) cylinder(h=upper_h+1, d=upper_d, $fn=32);
+    // neck channels in the upper level, connecting adjacent holes (X then Y)
+    for (r=[0:ROWS-1]) for (c=[0:COLS-2])
+      translate([c*pitch, -r*pitch - neck_w/2, slot_z0]) cube([pitch, neck_w, H-slot_z0+1]);
+    for (r=[0:ROWS-2]) for (c=[0:COLS-1])
+      translate([c*pitch - neck_w/2, -(r+1)*pitch, slot_z0]) cube([neck_w, pitch, H-slot_z0+1]);
   }
 }
 
