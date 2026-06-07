@@ -4,9 +4,9 @@
 const fs = require('fs');
 const path = require('path');
 
-// ---- params (keep in sync with iq_puzzle.scad) ----
-const ball_d=14, pitch=14, vlayer=14, neck_ratio=0.62;
-const socket_d=12, socket_depth=3, board_under=4, board_margin=6;
+// ---- params (keep in sync with iq_puzzle.scad) ----  ball diameter = 10 mm (1 cm)
+const ball_d=10, pitch=10, vlayer=10, neck_ratio=0.62;
+const socket_d=8, socket_depth=2.5, board_under=3, board_margin=5;
 const ROWS=5, COLS=10;
 const SEG=18;           // sphere/cylinder tessellation
 

@@ -10,17 +10,17 @@
 // "A".."J" -> a single piece by id
 part = "all";            // ["board","all","A","B","C","D","E","F","G","H","I","J"]
 
-/* [Main dimensions, mm] */
-ball_d     = 14;         // diameter of the balls (measure your set!)
-pitch      = 14;         // centre-to-centre spacing — for a ball toy this == ball_d (balls touch)
+/* [Main dimensions, mm]  — ball diameter measured at 10 mm (1 cm) */
+ball_d     = 10;         // diameter of the balls (measured: 1 cm)
+pitch      = 10;         // centre-to-centre spacing — == ball_d (balls touch)
 neck_ratio = 0.62;       // neck thickness between balls (x ball_d) — keeps prints solid
-vlayer     = 14;         // vertical spacing between stacked layers (== ball_d for a cubic stack)
+vlayer     = 10;         // vertical spacing between stacked layers (== ball_d for a cubic stack)
 
 /* [Board] */
-socket_d     = 12;       // socket (dimple) diameter — smaller than pitch so sockets don't merge
-socket_depth = 3;        // how deep a ball sinks into the board
-board_under  = 4;        // solid material below the sockets
-board_margin = 6;        // flat border around the grid
+socket_d     = 8;        // socket (dimple) diameter — smaller than pitch so sockets don't merge
+socket_depth = 2.5;      // how deep a ball sinks into the board
+board_under  = 3;        // solid material below the sockets
+board_margin = 5;        // flat border around the grid
 ROWS = 5;
 COLS = 10;
 
