@@ -118,6 +118,15 @@ function boardTris(){
     quad(cellV[cid(i-1,j,k-1)],cellV[cid(i,j,k-1)],cellV[cid(i,j,k)],cellV[cid(i-1,j,k)],!s0); }
   for(let i=0;i<Nx;i++)for(let j=1;j<Ny;j++)for(let k=1;k<Nz;k++){ const s0=f[vid(i,j,k)]<0,s1=f[vid(i+1,j,k)]<0; if(s0===s1)continue;
     quad(cellV[cid(i,j-1,k-1)],cellV[cid(i,j,k-1)],cellV[cid(i,j,k)],cellV[cid(i,j-1,k)],s0); }
+  // orient every triangle outward (normal along +SDF gradient) — correct shading & slicing
+  const eps=h*0.5;
+  for(const t of tris){
+    const ax=t[1][0]-t[0][0],ay=t[1][1]-t[0][1],az=t[1][2]-t[0][2], bx=t[2][0]-t[0][0],by=t[2][1]-t[0][1],bz=t[2][2]-t[0][2];
+    const nx=ay*bz-az*by, ny=az*bx-ax*bz, nz=ax*by-ay*bx;
+    const cx=(t[0][0]+t[1][0]+t[2][0])/3, cy=(t[0][1]+t[1][1]+t[2][1])/3, cz=(t[0][2]+t[1][2]+t[2][2])/3;
+    const gx=sdf(cx+eps,cy,cz)-sdf(cx-eps,cy,cz), gy=sdf(cx,cy+eps,cz)-sdf(cx,cy-eps,cz), gz=sdf(cx,cy,cz+eps)-sdf(cx,cy,cz-eps);
+    if(nx*gx+ny*gy+nz*gz<0){ const tmp=t[1]; t[1]=t[2]; t[2]=tmp; }
+  }
   return tris;
 }
 

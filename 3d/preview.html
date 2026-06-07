@@ -110,7 +110,7 @@ function show(part){
     : `<a href="stl/${part==='board'?'board':'piece_'+part}.stl" download>⬇ ${part}.stl</a>`;
   if(part==='board'){
     new STLLoader().load('stl/board.stl', geo=>{ geo.computeVertexNormals();
-      const m=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:'#5b6685',roughness:.7}));
+      const m=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:'#5b6685',roughness:.7,side:THREE.DoubleSide}));
       m.rotation.x=-Math.PI/2; group.add(m); fit(group);
     }, undefined, ()=>{ document.getElementById('dl').innerHTML+=' <span style="color:#ff5d6c">(не вдалось завантажити STL — відкрийте через сайт)</span>'; });
     return;
