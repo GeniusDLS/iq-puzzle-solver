@@ -37,9 +37,7 @@
     user-select:none;
   }
   .cell:hover{transform:scale(1.06)}
-  .cell.free{background:rgba(91,140,255,.22); border-color:var(--accent)}
-  .cell.preview{opacity:.7; border-color:#fff}
-  .cell.preview-bad{border-color:var(--err); box-shadow:0 0 8px rgba(255,93,108,.6)}
+  .cell.free{background:rgba(91,140,255,.30); border-color:var(--accent); box-shadow:0 0 8px rgba(91,140,255,.6)}
   .cell.fixed{border-color:#ffffff; box-shadow:0 0 0 2px rgba(255,255,255,.25) inset}
   .cell.solver{border-style:dashed; border-color:rgba(255,255,255,.55); opacity:.92}
   .cell.solver .lbl{opacity:.85}
@@ -94,7 +92,7 @@
 </style>
 </head>
 <body>
-  <h1>IQ Puzzler Solver <span class="ver">v1.9 · 2026-06-06</span></h1>
+  <h1>IQ Puzzler Solver <span class="ver">v2.0 · 2026-06-06</span></h1>
   <div class="sub">Поле 5×10 • 10 об'ємних фігур • кожна лягає однією зі своїх граней (faces) &nbsp;·&nbsp; <a class="navlink" href="challenges.html">Завдання з підказками →</a></div>
 
   <div class="layout">
@@ -107,7 +105,6 @@
         <button id="clearBtn" class="secondary">Очистити</button>
       </div>
       <div class="btns">
-        <button id="rotateBtn" class="secondary">↻ Повернути фігуру</button>
         <label class="toggle"><input type="checkbox" id="showLabels" checked> показувати літери</label>
       </div>
       <div id="status" class="status info">Намалюйте фіксовані фігури або натисніть «Розв'язати» для порожнього поля.</div>
@@ -124,9 +121,9 @@
       <div id="counter" class="counter"></div>
 
       <div class="hint">
-        Оберіть фігуру та грань, за потреби «↻ Повернути». Підсвічені клітинки — куди можна
-        поставити; наведіть, щоб побачити форму, і клікніть — уся фігура стане одразу.
-        Клік по поставленій фігурі — прибрати її. Solver добудовує решту (пунктирна рамка).
+        Клік по комірці малює активну фігуру обраним кольором (повторний клік — прибрати).
+        Форма, яку ви малюєте, має відповідати одній із граней фігури в будь-якій орієнтації.
+        Solver добудовує решту фігур; додані ним кульки показані пунктирною рамкою.
         <br><br>
         ⚠️ Геометрія граней — приклад. Звірте та за потреби виправте масив <code>PIECES</code>
         на початку файлу відповідно до вашого фізичного набору.
@@ -380,8 +377,6 @@ self.onmessage = (e) => {
   let solverCells = new Map();// cellIdx -> pieceId (solver added)
   let activePiece = PIECES[0].id;
   let activeFace = 0;
-  let ori = 0;               // orientation index of the active face
-  let hoverCell = null;      // for desktop placement preview
   let solving = false;
   let solutionIndex = 0;     // for "next solution"
   let lastContext = null;    // { occupiedStr, used } of last solve
@@ -409,11 +404,9 @@ self.onmessage = (e) => {
     d.style.setProperty('--vr', (i % COLS) + 1);
     d.style.setProperty('--vc', ROWS - Math.floor(i / COLS));
     d.addEventListener('click', () => onCellClick(i));
-    d.addEventListener('mouseenter', () => { hoverCell = i; render(); });
     boardEl.appendChild(d);
     cellEls.push(d);
   }
-  boardEl.addEventListener('mouseleave', () => { hoverCell = null; render(); });
 
   function setStatus(msg, kind){ statusEl.className = 'status ' + (kind||'info'); statusEl.textContent = msg; }
 
@@ -422,63 +415,63 @@ self.onmessage = (e) => {
   function pieceDone(pid){ const c = pieceCells(pid); return c.length>0 && validatePieceShape(pid, c).ok; }
   function firstFreePiece(){ return (PIECES.find(p => !pieceDone(p.id)) || {}).id || null; }
 
-  // ---- whole-piece placement: one click drops the entire active piece ----
-  const orientsOf = (pid, faceIdx) => { const p = pieceById[pid]; return generateOrientations(p.faces[faceIdx] || p.faces[0]); };
-  // cells the active piece would occupy if its top-left ball is anchored at `cell`
-  function placementAt(pid, faceIdx, oriIdx, cell){
-    const oris = orientsOf(pid, faceIdx);
-    const shape = oris[((oriIdx % oris.length) + oris.length) % oris.length];
-    const hr = Math.floor(cell/COLS), hc = cell%COLS, c0 = shape[0][1];
-    const cells = [];
-    for (const [dr,dc] of shape){ const r=hr+dr, c=hc+dc-c0;
-      if (r<0||r>=ROWS||c<0||c>=COLS) return null; cells.push(r*COLS+c); }
-    return cells;
-  }
-  const placementValid = (cells) => !!cells && cells.every(c => !fixed.has(c));
-  // anchor cells where the active piece (current face+orientation) fits entirely
-  function validAnchors(){
-    const s = new Set();
-    if (!activePiece) return s;
-    for (let c=0;c<NCELLS;c++){ const pl = placementAt(activePiece, activeFace, ori, c); if (placementValid(pl)) s.add(c); }
-    return s;
+  // Cells that the active piece (its selected face) could still cover: union of
+  // all in-bounds orientations that avoid other pieces and include the cells
+  // already painted for this piece. Narrows as you paint.
+  function candidateCells(){
+    if (!activePiece) return null;
+    const piece = pieceById[activePiece];
+    const cur = pieceCells(activePiece);
+    const blocked = new Set([...fixed.entries()].filter(([,v]) => v!==activePiece).map(([i]) => i));
+    const res = new Set();
+    const face = piece.faces[activeFace] || piece.faces[0];
+    for (const o of generateOrientations(face)){
+      for (let r=0;r<ROWS;r++) for (let c=0;c<COLS;c++){
+        const cells=[]; let ok=true;
+        for (const [dr,dc] of o){ const rr=r+dr, cc=c+dc;
+          if (rr<0||rr>=ROWS||cc<0||cc>=COLS){ ok=false; break; }
+          const idx=rr*COLS+cc; if (blocked.has(idx)){ ok=false; break; } cells.push(idx); }
+        if (!ok) continue;
+        if (cur.length){ let cov=true; for (const x of cur) if (cells.indexOf(x)<0){ cov=false; break; } if (!cov) continue; }
+        for (const x of cells) res.add(x);
+      }
+    }
+    return res;
   }
 
   function onCellClick(i){
     if (solving) return;
     if (fixed.has(i)){
-      const pid = fixed.get(i);                          // click any ball -> remove the whole piece
-      for (const [c,v] of [...fixed]) if (v===pid) fixed.delete(c);
-      activePiece = pid; activeFace = 0; ori = 0;         // make it active so you can re-place it
+      fixed.delete(i);                            // click a filled cell -> erase it
     } else {
-      if (!activePiece || pieceDone(activePiece)) activePiece = firstFreePiece();
-      if (!activePiece){ setStatus('Усі фігури вже розставлено.', 'info'); return; }
-      const cells = placementAt(activePiece, activeFace, ori, i);
-      if (!placementValid(cells)){ setStatus('Сюди фігура не стає — клікніть по підсвіченій клітинці (або «Повернути»).', 'err'); return; }
-      for (const c of cells) fixed.set(c, activePiece); // drop the whole piece at once
-      const f = firstFreePiece(); if (f){ activePiece=f; activeFace=0; ori=0; }
+      if (!activePiece || pieceDone(activePiece)) activePiece = firstFreePiece(); // active already placed -> next free
+      if (!activePiece){ setStatus('Усі фігури вже розставлено. Зітріть якусь, щоб змінити.', 'info'); return; }
+      const cand = candidateCells();              // only the highlighted cells are valid
+      if (cand && !cand.has(i)){ setStatus('Сюди ця грань не стане — клікайте по підсвічених клітинках.', 'err'); return; }
+      fixed.set(i, activePiece);                  // place a ball of the active piece
+      if (pieceDone(activePiece)){ const f=firstFreePiece(); if(f){ activePiece=f; activeFace=0; } } // auto-advance
     }
-    if (solverCells.size){ solverCells = new Map(); nextBtn.disabled = true; }
+    if (solverCells.size){ solverCells = new Map(); nextBtn.disabled = true; } // a successful edit invalidates the solver overlay
     render();
     setStatus("Готово до розв'язання.", 'info');
     diagEl.textContent = '';
   }
 
   function render(){
-    const placing = activePiece && !pieceDone(activePiece);
-    const anchors = placing ? validAnchors() : null;
-    let preview=null, previewOk=false;
-    if (placing && hoverCell!=null){ const pl=placementAt(activePiece, activeFace, ori, hoverCell);
-      if (pl){ preview=new Set(pl); previewOk=placementValid(pl); } }
+    const placing = activePiece && !pieceDone(activePiece); // highlight where the active face can fit
+    const cand = placing ? candidateCells() : null;
     for (let i=0;i<NCELLS;i++){
       const el = cellEls[i];
       let pid = fixed.get(i), klass = 'cell', label = '';
       if (pid !== undefined){ klass += ' fixed'; }
       else if (solverCells.has(i)){ pid = solverCells.get(i); klass += ' solver'; }
-      else if (anchors && anchors.has(i)){ klass += ' free'; }
-      if (preview && preview.has(i) && pid===undefined && !solverCells.has(i)) klass += previewOk ? ' preview' : ' preview-bad';
-      if (pid !== undefined){ el.style.background = pieceById[pid].color; label = pid; }
-      else if (preview && preview.has(i) && previewOk){ el.style.background = pieceById[activePiece].color; }
-      else { el.style.background = ''; }
+      else if (cand && cand.has(i)){ klass += ' free'; }
+      if (pid !== undefined){
+        el.style.background = pieceById[pid].color;
+        label = pid;
+      } else {
+        el.style.background = '';
+      }
       el.className = klass;
       el.innerHTML = (showLabels.checked && label) ? `<span class="lbl">${label}</span>` : '';
     }
@@ -533,7 +526,7 @@ self.onmessage = (e) => {
     const p = pieceById[activePiece];
     p.faces.forEach((face, idx) => {
       const el = faceMini(face, p.color, idx===activeFace);
-      el.addEventListener('click', () => { activeFace = idx; ori = 0; render(); });
+      el.addEventListener('click', () => { activeFace = idx; render(); });
       facesEl.appendChild(el);
     });
   }
@@ -631,8 +624,6 @@ self.onmessage = (e) => {
     render(); setStatus('Поле очищено.', 'info'); diagEl.textContent='';
   });
   showLabels.addEventListener('change', render);
-  document.getElementById('rotateBtn').addEventListener('click', () => { ori++; render(); });
-  window.addEventListener('keydown', (e) => { if (e.key==='r'||e.key==='R'||e.key==='ROTATE'){ ori++; render(); } });
 
   render();
 })();
