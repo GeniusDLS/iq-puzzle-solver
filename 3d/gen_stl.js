@@ -9,7 +9,7 @@ const path = require('path');
 const ball_d=10, pitch=10, vlayer=10, neck_ratio=0.62;
 // board = a mould enclosing the full 5x10 x 2-layer ball template (gap clearance);
 // the upper ball layer protrudes half a diameter for easy insert/remove.
-const gap=0.3, wall=3, floor=3, push_d=5;   // push_d: bottom push-out hole under each ball
+const gap=0.4, wall=3, floor=3, push_d=5;   // push_d: bottom push-out hole under each ball
 const VOX=0.4;   // voxel size for the board mesh (smaller = smoother, bigger file)
 const ROWS=5, COLS=10;
 const SEG=18;           // sphere/cylinder tessellation

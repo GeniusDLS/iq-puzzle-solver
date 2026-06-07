@@ -18,7 +18,7 @@ neck_ratio = 0.62;       // neck thickness between balls (x ball_d) — keeps pr
 vlayer     = 10;         // vertical spacing between stacked layers (== ball_d for a cubic stack)
 
 /* [Board — mould enclosing the 5x10 x 2-layer ball template] */
-gap    = 0.3;   // clearance around the template (free passage; raise to 0.4-0.5 if FDM tightens)
+gap    = 0.4;   // clearance around the template (free passage)
 wall   = 3;     // side wall thickness
 floor  = 3;     // floor thickness under the bottom ball layer
 push_d = 5;     // push-out hole in the floor under each ball (0 = solid floor)
