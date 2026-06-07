@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IQ Puzzler — 3D превʼю</title>
+<style>
+  :root{--bg:#0f1220;--panel:#181c2e;--line:#2c3350;--text:#e8ecff;--muted:#97a0c4;--accent:#5b8cff}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif}
+  #ui{position:fixed;top:12px;left:12px;z-index:10;background:rgba(24,28,46,.92);border:1px solid var(--line);
+    border-radius:12px;padding:12px 14px;max-width:280px}
+  #ui h1{font-size:15px;margin:0 0 8px}
+  #ui a{color:var(--accent);text-decoration:none}
+  select,button{background:#20253c;color:var(--text);border:1px solid var(--line);border-radius:8px;
+    padding:7px 10px;font-size:13px;cursor:pointer}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+  .muted{color:var(--muted);font-size:12px;line-height:1.5;margin-top:8px}
+  #dl{font-size:12px;margin-top:8px}
+  canvas{display:block}
+</style>
+</head>
+<body>
+  <div id="ui">
+    <h1>IQ Puzzler — 3D превʼю</h1>
+    <div class="row">
+      <label for="part">Деталь:</label>
+      <select id="part">
+        <option value="all">Усі фігури</option>
+        <option value="board">Дошка (STL)</option>
+        <option value="A">A · Жовта</option><option value="B">B · Помаранчева</option>
+        <option value="C">C · Рожева</option><option value="D">D · Червона</option>
+        <option value="E">E · Голуба</option><option value="F">F · Бірюзова</option>
+        <option value="G">G · Фіолетова</option><option value="H">H · Синя</option>
+        <option value="I">I · Салатова</option><option value="J">J · Зелена</option>
+      </select>
+      <button id="spin">⟳ авто</button>
+    </div>
+    <div id="dl"></div>
+    <div class="muted">Тягніть — обертати, колесо — масштаб. Превʼю фігур будується з даних;
+      «Дошка» вантажить <code>stl/board.stl</code>. <a href="../index.html">← Solver</a></div>
+  </div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+
+const ball_d=14, pitch=14, vlayer=14, neck_ratio=0.62;
+const PIECES = {
+  A:{c:'#f5a623',b:[[0,0,0],[0,0,1],[1,0,0],[1,0,1],[2,0,1],[3,0,1],[3,1,1]]},
+  B:{c:'#ff6d00',b:[[0,0,1],[1,0,0],[1,0,1],[1,1,0],[1,1,1],[2,0,1],[3,0,0],[3,0,1]]},
+  C:{c:'#ff5dba',b:[[0,0,1],[0,1,1],[1,0,0],[1,0,1],[1,1,0],[1,1,1],[2,0,1],[3,0,1]]},
+  D:{c:'#e8174a',b:[[0,0,0],[0,0,1],[0,1,0],[0,1,1],[1,0,1],[2,0,1],[3,0,0],[3,0,1]]},
+  E:{c:'#29b6f6',b:[[0,0,0],[0,0,1],[0,1,0],[0,1,1],[1,0,1],[2,0,0],[2,0,1],[3,0,1]]},
+  F:{c:'#1abc9c',b:[[2,0,0],[2,0,1],[2,1,0],[2,1,1],[0,1,0],[1,1,0],[1,1,1],[3,1,0]]},
+  G:{c:'#8e44ad',b:[[0,0,0],[0,0,1],[1,0,1],[1,1,1],[2,0,1],[2,1,1]]},
+  H:{c:'#2962ff',b:[[0,0,1],[0,1,1],[1,0,0],[1,0,1],[2,0,1],[2,1,1]]},
+  I:{c:'#a4d233',b:[[0,0,0],[0,0,1],[0,1,0],[0,1,1],[2,0,0],[2,1,0],[1,1,0]]},
+  J:{c:'#2ecc40',b:[[0,0,1],[0,1,1],[1,0,0],[1,0,1],[1,1,0],[1,1,1],[2,0,1]]},
+};
+const adj=(a,b)=>Math.abs(a[0]-b[0])+Math.abs(a[1]-b[1])+Math.abs(a[2]-b[2])===1;
+// piece-local coords -> three.js (x right, y up, z toward viewer)
+const pos=(b)=>new THREE.Vector3(b[0]*pitch, b[2]*vlayer, -b[1]*pitch);
+
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth,innerHeight); renderer.setPixelRatio(devicePixelRatio);
+document.body.appendChild(renderer.domElement);
+const scene=new THREE.Scene(); scene.background=new THREE.Color('#0f1220');
+const camera=new THREE.PerspectiveCamera(45,innerWidth/innerHeight,0.1,2000);
+const controls=new OrbitControls(camera,renderer.domElement); controls.enableDamping=true;
+scene.add(new THREE.HemisphereLight(0xffffff,0x223044,1.1));
+const dir=new THREE.DirectionalLight(0xffffff,1.4); dir.position.set(60,120,80); scene.add(dir);
+
+let group=new THREE.Group(); scene.add(group);
+
+function buildPiece(def,ox=0,oz=0){
+  const g=new THREE.Group();
+  const mat=new THREE.MeshStandardMaterial({color:def.c,roughness:.45,metalness:.1});
+  const sph=new THREE.SphereGeometry(ball_d/2,28,20);
+  for(const b of def.b){ const m=new THREE.Mesh(sph,mat); m.position.copy(pos(b)).add(new THREE.Vector3(ox,0,oz)); g.add(m); }
+  const nr=ball_d*neck_ratio/2;
+  for(let i=0;i<def.b.length;i++)for(let j=i+1;j<def.b.length;j++) if(adj(def.b[i],def.b[j])){
+    const p0=pos(def.b[i]),p1=pos(def.b[j]); const mid=p0.clone().add(p1).multiplyScalar(.5).add(new THREE.Vector3(ox,0,oz));
+    const len=p0.distanceTo(p1); const cyl=new THREE.Mesh(new THREE.CylinderGeometry(nr,nr,len,18),mat);
+    cyl.position.copy(mid);
+    cyl.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), p1.clone().sub(p0).normalize());
+    g.add(cyl);
+  }
+  return g;
+}
+function fit(obj){
+  const box=new THREE.Box3().setFromObject(obj); const s=new THREE.Vector3(),c=new THREE.Vector3();
+  box.getSize(s); box.getCenter(c); obj.position.sub(c);                 // centre
+  const R=Math.max(s.x,s.y,s.z); camera.position.set(R*0.9,R*0.9,R*1.4);
+  controls.target.set(0,0,0); camera.lookAt(0,0,0);
+}
+function clear(){ scene.remove(group); group=new THREE.Group(); scene.add(group); }
+
+function show(part){
+  clear();
+  document.getElementById('dl').innerHTML = part==='all'
+    ? Object.keys(PIECES).map(k=>`<a href="stl/piece_${k}.stl" download>${k}</a>`).join(' ')+` · <a href="stl/board.stl" download>board</a>`
+    : `<a href="stl/${part==='board'?'board':'piece_'+part}.stl" download>⬇ ${part}.stl</a>`;
+  if(part==='board'){
+    new STLLoader().load('stl/board.stl', geo=>{ geo.computeVertexNormals();
+      const m=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:'#5b6685',roughness:.7}));
+      m.rotation.x=-Math.PI/2; group.add(m); fit(group);
+    }, undefined, ()=>{ document.getElementById('dl').innerHTML+=' <span style="color:#ff5d6c">(не вдалось завантажити STL — відкрийте через сайт)</span>'; });
+    return;
+  }
+  if(part==='all'){
+    const ids=Object.keys(PIECES);
+    ids.forEach((k,i)=>{ const col=i%5,row=Math.floor(i/5);
+      group.add(buildPiece(PIECES[k], col*(5*pitch+pitch), -row*(3*pitch+2*pitch))); });
+  } else {
+    group.add(buildPiece(PIECES[part]));
+  }
+  fit(group);
+}
+
+let spin=false;
+document.getElementById('part').addEventListener('change',e=>show(e.target.value));
+document.getElementById('spin').addEventListener('click',()=>{spin=!spin;});
+addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); });
+
+(function loop(){ requestAnimationFrame(loop); if(spin) group.rotation.y+=0.01; controls.update(); renderer.render(scene,camera); })();
+show('all');
+</script>
+</body>
+</html>
