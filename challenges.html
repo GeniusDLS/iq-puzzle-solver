@@ -82,6 +82,21 @@
     background:#0c0f1c; border:1px solid var(--line); color:var(--text); padding:10px 16px;
     border-radius:10px; font-size:13px; opacity:0; transition:opacity .25s; pointer-events:none; z-index:9}
 
+  /* win modal */
+  .modal-overlay{position:fixed; inset:0; background:rgba(7,9,18,.72); display:flex; align-items:center;
+    justify-content:center; z-index:50; padding:20px}
+  .modal-overlay[hidden]{display:none}
+  .modal-card{background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:26px 28px;
+    max-width:340px; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,.5);
+    animation:pop .35s cubic-bezier(.2,.9,.3,1.4)}
+  @keyframes pop{0%{transform:scale(.7); opacity:0} 100%{transform:scale(1); opacity:1}}
+  .modal-emoji{font-size:54px; line-height:1; margin-bottom:6px; animation:bounce 1.3s ease-in-out infinite}
+  @keyframes bounce{0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)}}
+  .modal-title{margin:6px 0 10px; font-size:22px; color:var(--ok)}
+  .modal-info{font-size:14px; color:var(--text); line-height:1.6; margin-bottom:18px}
+  .modal-info b{color:var(--accent)}
+  .modal-btns{display:flex; gap:10px; justify-content:center}
+
   /* Board orientation is controlled by JS (rotate button). */
   @media (max-width:600px){
     :root{--cell:38px}
@@ -107,7 +122,7 @@
 </style>
 </head>
 <body>
-  <h1>Завдання з підказками <span class="ver">v2.3 · 2026-06-06</span></h1>
+  <h1>Завдання з підказками <span class="ver">v2.4 · 2026-06-06</span></h1>
   <div class="sub">Оберіть рівень → доставте відсутні фігури. Застрягли — тисніть «Підказка». <a class="navlink" href="index.html">← На головну (вільний solver)</a></div>
 
   <div class="layout">
@@ -143,6 +158,18 @@
     </div>
   </div>
   <div id="toast"></div>
+
+  <div id="winModal" class="modal-overlay" hidden>
+    <div class="modal-card">
+      <div class="modal-emoji">🎉</div>
+      <h2 class="modal-title">Завдання розв'язано!</h2>
+      <div id="winInfo" class="modal-info"></div>
+      <div class="modal-btns">
+        <button id="winNext">Нове завдання</button>
+        <button id="winClose" class="secondary">Закрити</button>
+      </div>
+    </div>
+  </div>
 
 <script type="text/plain" id="core">
 /* ===== IQ Puzzler solver core (DOM-free) ===== */
@@ -589,7 +616,18 @@ function solve(startOccupied, startUsed, model, limitNodes, skip){
     const nb=recordSolve(elapsed);
     setStatus(`Розв'язано за ${fmt(elapsed)}! 🎉 Підказок: ${hintsUsed}.${nb?' 🏅 Новий рекорд часу!':''}`,'ok');
     render();
+    const rec=loadRecs()[level];
+    showWin(`Рівень <b>${LEVELS[level].name}</b><br>Час: <b>${fmt(elapsed)}</b> · підказок: <b>${hintsUsed}</b>`
+      + (nb?'<br>🏅 Новий рекорд часу!':'')
+      + (rec?`<br><span style="color:var(--muted)">найкращий час: ${fmt(rec.bestMs)} · розв'язано: ${rec.count}</span>`:''));
   }
+
+  const winModal=document.getElementById('winModal'), winInfo=document.getElementById('winInfo');
+  function showWin(html){ winInfo.innerHTML=html; winModal.hidden=false; }
+  function hideWin(){ winModal.hidden=true; }
+  document.getElementById('winClose').addEventListener('click',hideWin);
+  document.getElementById('winNext').addEventListener('click',()=>{ hideWin(); newChallenge(); });
+  winModal.addEventListener('click',(e)=>{ if(e.target===winModal) hideWin(); });
 
   function nextHintPiece(){
     for(const p of PIECES){
