@@ -82,16 +82,32 @@
     background:#0c0f1c; border:1px solid var(--line); color:var(--text); padding:10px 16px;
     border-radius:10px; font-size:13px; opacity:0; transition:opacity .25s; pointer-events:none; z-index:9}
 
-  /* Board orientation is controlled by JS (rotate button). Bigger cells on phones. */
+  /* Board orientation is controlled by JS (rotate button). */
   @media (max-width:600px){
-    :root{--cell:42px}
-    body{padding:14px}
-    .layout{gap:16px}
+    :root{--cell:38px}
+    body{padding:12px}
+    .layout{gap:14px}
+    .card{padding:14px}
+  }
+  /* phones (e.g. Galaxy M35 ~393px): keep board + palette side by side */
+  @media (max-width:430px){
+    :root{--cell:32px}
+    .board-row{flex-wrap:nowrap; gap:10px}
+    .side{flex:1 1 0; min-width:0}
+    .side .pieces{grid-template-columns:repeat(2,1fr); gap:6px}
+    .piece{padding:5px 3px; gap:2px}
+    .piece .pname{display:none}
+    .swatch{width:18px;height:18px}
+    .card{padding:12px}
+    h1{font-size:17px}
+    .btns{gap:8px}
+    button{padding:8px 12px; font-size:13px}
+    .levels{gap:6px} .lvl{padding:6px 9px; font-size:12px}
   }
 </style>
 </head>
 <body>
-  <h1>Завдання з підказками <span class="ver">v2.2 · 2026-06-06</span></h1>
+  <h1>Завдання з підказками <span class="ver">v2.3 · 2026-06-06</span></h1>
   <div class="sub">Оберіть рівень → доставте відсутні фігури. Застрягли — тисніть «Підказка». <a class="navlink" href="index.html">← На головну (вільний solver)</a></div>
 
   <div class="layout">
