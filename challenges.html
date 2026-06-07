@@ -8,6 +8,7 @@
   :root{
     --bg:#0f1220; --panel:#181c2e; --panel2:#20253c; --line:#2c3350;
     --text:#e8ecff; --muted:#97a0c4; --accent:#5b8cff; --ok:#34d27b; --err:#ff5d6c; --hint:#ffcf4d;
+    --cell:40px;
   }
   *{box-sizing:border-box}
   body{margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
@@ -23,7 +24,7 @@
 
   .board{display:grid; grid-template-columns:repeat(10,40px); grid-template-rows:repeat(5,40px);
     gap:6px; padding:14px; background:var(--panel2); border-radius:14px; border:1px solid var(--line);}
-  .cell{width:40px; height:40px; border-radius:50%; background:#0d1020; border:2px solid #2a3152;
+  .cell{width:var(--cell); height:var(--cell); border-radius:50%; background:#0d1020; border:2px solid #2a3152;
     cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700;
     color:rgba(255,255,255,.85); transition:transform .05s, box-shadow .1s; user-select:none;}
   .cell:hover{transform:scale(1.06)}
@@ -74,17 +75,16 @@
     background:#0c0f1c; border:1px solid var(--line); color:var(--text); padding:10px 16px;
     border-radius:10px; font-size:13px; opacity:0; transition:opacity .25s; pointer-events:none; z-index:9}
 
-  /* On narrow screens show the board vertically (10 rows x 5 cols). */
+  /* Board orientation is controlled by JS (rotate button). Bigger cells on phones. */
   @media (max-width:600px){
+    :root{--cell:42px}
     body{padding:14px}
     .layout{gap:16px}
-    .board{grid-template-columns:repeat(5,44px); grid-template-rows:repeat(10,44px)}
-    .cell{grid-row:var(--vr); grid-column:var(--vc); width:44px; height:44px}
   }
 </style>
 </head>
 <body>
-  <h1>Завдання з підказками <span class="ver">v2.0 · 2026-06-06</span></h1>
+  <h1>Завдання з підказками <span class="ver">v2.1 · 2026-06-06</span></h1>
   <div class="sub">Оберіть рівень → доставте відсутні фігури. Застрягли — тисніть «Підказка». <a class="navlink" href="index.html">← На головну (вільний solver)</a></div>
 
   <div class="layout">
@@ -94,6 +94,7 @@
       <div class="btns">
         <button id="newBtn">Нове завдання</button>
         <button id="hintBtn" class="hintbtn">Підказка</button>
+        <button id="rotateBoardBtn" class="secondary">⟳ Обернути поле</button>
         <button id="resetBtn" class="secondary">Скинути мої ходи</button>
         <button id="revealBtn" class="secondary">Показати розв'язок</button>
         <button id="shareBtn" class="secondary">🔗 Поділитися</button>
@@ -333,6 +334,7 @@ function solve(startOccupied, startUsed, model, limitNodes, skip){
   let hintedSet = new Set();
   let playerCells = new Map();
   let activePiece = null, activeFace = 0;
+  let boardRot = (typeof window !== 'undefined' && window.innerWidth <= 600) ? 90 : 0; // board view rotation
   let pendingHint = null;
   let hintsUsed = 0;
   let solved = false;
@@ -367,8 +369,18 @@ function solve(startOccupied, startUsed, model, limitNodes, skip){
 
   const cellEls=[];
   for(let i=0;i<NCELLS;i++){ const d=document.createElement('div'); d.className='cell';
-    d.style.setProperty('--vr',(i%COLS)+1); d.style.setProperty('--vc',ROWS-Math.floor(i/COLS));
     d.addEventListener('click',()=>onCell(i)); boardEl.appendChild(d); cellEls.push(d); }
+  function applyBoardRotation(){
+    const rot=((boardRot%360)+360)%360; let dispRows,dispCols,pos;
+    if(rot===0){ dispRows=ROWS; dispCols=COLS; pos=(r,c)=>[r,c]; }
+    else if(rot===90){ dispRows=COLS; dispCols=ROWS; pos=(r,c)=>[c,ROWS-1-r]; }
+    else if(rot===180){ dispRows=ROWS; dispCols=COLS; pos=(r,c)=>[ROWS-1-r,COLS-1-c]; }
+    else { dispRows=COLS; dispCols=ROWS; pos=(r,c)=>[COLS-1-c,r]; }
+    boardEl.style.gridTemplateColumns=`repeat(${dispCols}, var(--cell))`;
+    boardEl.style.gridTemplateRows=`repeat(${dispRows}, var(--cell))`;
+    for(let i=0;i<NCELLS;i++){ const [dr,dc]=pos(Math.floor(i/COLS),i%COLS); cellEls[i].style.gridRow=dr+1; cellEls[i].style.gridColumn=dc+1; }
+  }
+  applyBoardRotation();
 
   LEVELS.forEach((L,idx)=>{ const b=document.createElement('div'); b.className='lvl';
     b.textContent=L.name; b.addEventListener('click',()=>{ level=idx; newChallenge(); }); levelsEl.appendChild(b); });
@@ -598,6 +610,7 @@ function solve(startOccupied, startUsed, model, limitNodes, skip){
     } else toast('Скопіюйте адресу з рядка браузера');
   }
 
+  document.getElementById('rotateBoardBtn').addEventListener('click',()=>{ boardRot+=90; applyBoardRotation(); });
   document.getElementById('newBtn').addEventListener('click',()=>newChallenge());
   document.getElementById('hintBtn').addEventListener('click',onHint);
   document.getElementById('revealBtn').addEventListener('click',onReveal);

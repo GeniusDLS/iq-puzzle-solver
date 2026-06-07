@@ -8,6 +8,7 @@
   :root{
     --bg:#0f1220; --panel:#181c2e; --panel2:#20253c; --line:#2c3350;
     --text:#e8ecff; --muted:#97a0c4; --accent:#5b8cff; --ok:#34d27b; --err:#ff5d6c;
+    --cell:40px;
   }
   *{box-sizing:border-box}
   body{
@@ -31,7 +32,7 @@
     gap:6px; padding:14px; background:var(--panel2); border-radius:14px; border:1px solid var(--line);
   }
   .cell{
-    width:40px; height:40px; border-radius:50%; background:#0d1020; border:2px solid #2a3152;
+    width:var(--cell); height:var(--cell); border-radius:50%; background:#0d1020; border:2px solid #2a3152;
     cursor:pointer; display:flex; align-items:center; justify-content:center;
     font-size:12px; font-weight:700; color:rgba(255,255,255,.85); transition:transform .05s, box-shadow .1s;
     user-select:none;
@@ -82,17 +83,17 @@
   .hint{font-size:12px;color:var(--muted);margin-top:10px;max-width:360px;line-height:1.5}
   label.toggle{font-size:13px;color:var(--muted);display:flex;gap:6px;align-items:center;cursor:pointer}
 
-  /* On narrow screens show the board vertically (10 rows x 5 cols). */
+  /* Board orientation is controlled by JS (rotate button). On phones use
+     slightly bigger cells for touch. */
   @media (max-width:600px){
+    :root{--cell:42px}
     body{padding:14px}
     .layout{gap:16px}
-    .board{grid-template-columns:repeat(5,44px); grid-template-rows:repeat(10,44px)}
-    .cell{grid-row:var(--vr); grid-column:var(--vc); width:44px; height:44px}
   }
 </style>
 </head>
 <body>
-  <h1>IQ Puzzler Solver <span class="ver">v2.0 · 2026-06-06</span></h1>
+  <h1>IQ Puzzler Solver <span class="ver">v2.1 · 2026-06-06</span></h1>
   <div class="sub">Поле 5×10 • 10 об'ємних фігур • кожна лягає однією зі своїх граней (faces) &nbsp;·&nbsp; <a class="navlink" href="challenges.html">Завдання з підказками →</a></div>
 
   <div class="layout">
@@ -105,6 +106,7 @@
         <button id="clearBtn" class="secondary">Очистити</button>
       </div>
       <div class="btns">
+        <button id="rotateBoardBtn" class="secondary">⟳ Обернути поле</button>
         <label class="toggle"><input type="checkbox" id="showLabels" checked> показувати літери</label>
       </div>
       <div id="status" class="status info">Намалюйте фіксовані фігури або натисніть «Розв'язати» для порожнього поля.</div>
@@ -377,6 +379,7 @@ self.onmessage = (e) => {
   let solverCells = new Map();// cellIdx -> pieceId (solver added)
   let activePiece = PIECES[0].id;
   let activeFace = 0;
+  let boardRot = (typeof window !== 'undefined' && window.innerWidth <= 600) ? 90 : 0; // board view rotation
   let solving = false;
   let solutionIndex = 0;     // for "next solution"
   let lastContext = null;    // { occupiedStr, used } of last solve
@@ -400,13 +403,26 @@ self.onmessage = (e) => {
     const d = document.createElement('div');
     d.className = 'cell';
     d.dataset.idx = i;
-    // vertical (mobile) layout target cell: rotate the 5x10 board 90deg
-    d.style.setProperty('--vr', (i % COLS) + 1);
-    d.style.setProperty('--vc', ROWS - Math.floor(i / COLS));
     d.addEventListener('click', () => onCellClick(i));
     boardEl.appendChild(d);
     cellEls.push(d);
   }
+  // Visually rotate the 5x10 board by boardRot degrees (cosmetic; model unchanged).
+  function applyBoardRotation(){
+    const rot = ((boardRot % 360) + 360) % 360;
+    let dispRows, dispCols, pos;
+    if (rot===0){ dispRows=ROWS; dispCols=COLS; pos=(r,c)=>[r,c]; }
+    else if (rot===90){ dispRows=COLS; dispCols=ROWS; pos=(r,c)=>[c, ROWS-1-r]; }
+    else if (rot===180){ dispRows=ROWS; dispCols=COLS; pos=(r,c)=>[ROWS-1-r, COLS-1-c]; }
+    else { dispRows=COLS; dispCols=ROWS; pos=(r,c)=>[COLS-1-c, r]; }
+    boardEl.style.gridTemplateColumns = `repeat(${dispCols}, var(--cell))`;
+    boardEl.style.gridTemplateRows = `repeat(${dispRows}, var(--cell))`;
+    for (let i=0;i<NCELLS;i++){
+      const [dr,dc] = pos(Math.floor(i/COLS), i%COLS);
+      cellEls[i].style.gridRow = dr+1; cellEls[i].style.gridColumn = dc+1;
+    }
+  }
+  applyBoardRotation();
 
   function setStatus(msg, kind){ statusEl.className = 'status ' + (kind||'info'); statusEl.textContent = msg; }
 
@@ -624,6 +640,7 @@ self.onmessage = (e) => {
     render(); setStatus('Поле очищено.', 'info'); diagEl.textContent='';
   });
   showLabels.addEventListener('change', render);
+  document.getElementById('rotateBoardBtn').addEventListener('click', () => { boardRot += 90; applyBoardRotation(); });
 
   render();
 })();
