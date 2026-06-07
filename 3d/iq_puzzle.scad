@@ -18,9 +18,10 @@ neck_ratio = 0.62;       // neck thickness between balls (x ball_d) — keeps pr
 vlayer     = 10;         // vertical spacing between stacked layers (== ball_d for a cubic stack)
 
 /* [Board — mould enclosing the 5x10 x 2-layer ball template] */
-gap   = 0.3;   // clearance around the template (free passage of pieces)
-wall  = 3;     // side wall thickness
-floor = 3;     // floor thickness under the bottom ball layer
+gap    = 0.3;   // clearance around the template (free passage; raise to 0.4-0.5 if FDM tightens)
+wall   = 3;     // side wall thickness
+floor  = 3;     // floor thickness under the bottom ball layer
+push_d = 5;     // push-out hole in the floor under each ball (0 = solid floor)
 ROWS = 5;
 COLS = 10;
 
@@ -104,6 +105,9 @@ module board(){
   difference(){
     translate([-edge, -(ROWS-1)*pitch-edge, 0]) cube([bx, by, H]);
     ball_template(gap);     // hollow it out: template + gap clearance
+    if (push_d > 0)         // push-out holes in the floor under each ball
+      for (r=[0:ROWS-1]) for (c=[0:COLS-1])
+        translate([c*pitch, -r*pitch, -1]) cylinder(h=z_bottom()+1, d=push_d, $fn=24);
   }
 }
 

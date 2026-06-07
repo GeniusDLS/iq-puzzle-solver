@@ -9,7 +9,7 @@ const path = require('path');
 const ball_d=10, pitch=10, vlayer=10, neck_ratio=0.62;
 // board = a mould enclosing the full 5x10 x 2-layer ball template (gap clearance);
 // the upper ball layer protrudes half a diameter for easy insert/remove.
-const gap=0.3, wall=3, floor=3;
+const gap=0.3, wall=3, floor=3, push_d=5;   // push_d: bottom push-out hole under each ball
 const VOX=0.4;   // voxel size for the board mesh (smaller = smoother, bigger file)
 const ROWS=5, COLS=10;
 const SEG=18;           // sphere/cylinder tessellation
@@ -68,7 +68,7 @@ function boardTris(){
   // Mould enclosing the full 5x10 x 2-layer ball template (spheres + necks in
   // x/y/z) with `gap` clearance; open at the top so the upper balls protrude.
   // Meshed by voxel-surface extraction (robust for arbitrary CSG).
-  const R=ball_d/2, cr=R+gap, nr=ball_d*neck_ratio/2+gap, cr2=cr*cr, nr2=nr*nr;
+  const R=ball_d/2, cr=R+gap, nr=ball_d*neck_ratio/2+gap, cr2=cr*cr, nr2=nr*nr, push_r2=(push_d/2)**2;
   const z_b=floor+R+gap, z_t=z_b+vlayer, H=z_t;          // top at upper-layer centre
   const zc=l=>z_b+l*vlayer;
   const edge=R+gap+wall;
@@ -79,6 +79,7 @@ function boardTris(){
       const c=ci+dc, r=ri+dr; if(c<0||c>=COLS||r<0||r>=ROWS) continue;
       const Cx=c*pitch, Cy=-r*pitch, Cz=zc(l);
       if((x-Cx)**2+(y-Cy)**2+(z-Cz)**2<cr2) return true;       // ball cavity
+      if(push_d>0 && l===0 && z<zc(0) && (x-Cx)**2+(y-Cy)**2<push_r2) return true; // floor push-out hole
       // necks from this centre to +x, +y (same layer) and to the other layer
       const nb=[];
       if(c<COLS-1) nb.push([(c+1)*pitch,Cy,Cz]);
