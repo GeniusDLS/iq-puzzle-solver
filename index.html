@@ -67,6 +67,13 @@
   .dot.on{background:var(--c)}
   .face .meta{font-size:10px;color:var(--muted)}
 
+  /* compact layout: faces on top, colour palette to the right of the board */
+  .faces-top{display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:14px}
+  .ftitle{font-weight:600; font-size:13px}
+  .board-row{display:flex; gap:18px; align-items:flex-start; flex-wrap:wrap}
+  .side{min-width:150px}
+  .side .pieces{grid-template-columns:repeat(2, 1fr)}
+
   .btns{display:flex; gap:10px; flex-wrap:wrap; margin-top:16px}
   button{
     background:var(--accent); color:#fff; border:0; padding:10px 16px; border-radius:10px;
@@ -93,12 +100,22 @@
 </style>
 </head>
 <body>
-  <h1>IQ Puzzler Solver <span class="ver">v2.1 · 2026-06-06</span></h1>
+  <h1>IQ Puzzler Solver <span class="ver">v2.2 · 2026-06-06</span></h1>
   <div class="sub">Поле 5×10 • 10 об'ємних фігур • кожна лягає однією зі своїх граней (faces) &nbsp;·&nbsp; <a class="navlink" href="challenges.html">Завдання з підказками →</a></div>
 
   <div class="layout">
     <div class="card">
-      <div id="board" class="board" aria-label="Ігрове поле"></div>
+      <div class="faces-top">
+        <span class="ftitle">Грань активної фігури:</span>
+        <div id="faces" class="faces"></div>
+      </div>
+      <div class="board-row">
+        <div id="board" class="board" aria-label="Ігрове поле"></div>
+        <div class="side">
+          <div class="ftitle" style="margin-bottom:8px">Фігура (колір)</div>
+          <div id="pieces" class="pieces"></div>
+        </div>
+      </div>
       <div class="btns">
         <button id="solveBtn">Розв'язати</button>
         <button id="nextBtn" class="secondary" disabled>Наступний розв'язок</button>
@@ -110,25 +127,12 @@
         <label class="toggle"><input type="checkbox" id="showLabels" checked> показувати літери</label>
       </div>
       <div id="status" class="status info">Намалюйте фіксовані фігури або натисніть «Розв'язати» для порожнього поля.</div>
-      <div id="diag" class="diag"></div>
-    </div>
-
-    <div class="card" style="max-width:420px">
-      <div style="font-weight:600;margin-bottom:10px">Фігури</div>
-      <div id="pieces" class="pieces"></div>
-
-      <div style="font-weight:600;margin:16px 0 6px">Грані активної фігури</div>
-      <div id="faces" class="faces"></div>
-
       <div id="counter" class="counter"></div>
-
+      <div id="diag" class="diag"></div>
       <div class="hint">
-        Клік по комірці малює активну фігуру обраним кольором (повторний клік — прибрати).
-        Форма, яку ви малюєте, має відповідати одній із граней фігури в будь-якій орієнтації.
-        Solver добудовує решту фігур; додані ним кульки показані пунктирною рамкою.
-        <br><br>
-        ⚠️ Геометрія граней — приклад. Звірте та за потреби виправте масив <code>PIECES</code>
-        на початку файлу відповідно до вашого фізичного набору.
+        Оберіть фігуру (колір) праворуч і грань зверху, далі клікайте по підсвічених клітинках.
+        Solver добудовує решту; додані ним кульки — пунктирна рамка. Геометрія граней — приклад,
+        за потреби виправте масив <code>PIECES</code> у коді.
       </div>
     </div>
   </div>

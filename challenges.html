@@ -60,6 +60,13 @@
   .dot.on{background:var(--c)}
   .face .meta{font-size:10px;color:var(--muted)}
 
+  /* compact layout: faces on top, colour palette to the right of the board */
+  .faces-top{display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:14px}
+  .ftitle{font-weight:600; font-size:13px}
+  .board-row{display:flex; gap:18px; align-items:flex-start; flex-wrap:wrap}
+  .side{min-width:150px}
+  .side .pieces{grid-template-columns:repeat(2, 1fr)}
+
   .btns{display:flex; gap:10px; flex-wrap:wrap; margin-top:16px}
   button{background:var(--accent); color:#fff; border:0; padding:10px 16px; border-radius:10px;
     font-size:14px; font-weight:600; cursor:pointer}
@@ -84,13 +91,23 @@
 </style>
 </head>
 <body>
-  <h1>Завдання з підказками <span class="ver">v2.1 · 2026-06-06</span></h1>
+  <h1>Завдання з підказками <span class="ver">v2.2 · 2026-06-06</span></h1>
   <div class="sub">Оберіть рівень → доставте відсутні фігури. Застрягли — тисніть «Підказка». <a class="navlink" href="index.html">← На головну (вільний solver)</a></div>
 
   <div class="layout">
     <div class="card">
       <div id="levels" class="levels"></div>
-      <div id="board" class="board" aria-label="Поле"></div>
+      <div class="faces-top">
+        <span class="ftitle">Грань активної фігури:</span>
+        <div id="faces" class="faces"></div>
+      </div>
+      <div class="board-row">
+        <div id="board" class="board" aria-label="Поле"></div>
+        <div class="side">
+          <div class="ftitle" style="margin-bottom:8px">Фігури (колір)</div>
+          <div id="pieces" class="pieces"></div>
+        </div>
+      </div>
       <div class="btns">
         <button id="newBtn">Нове завдання</button>
         <button id="hintBtn" class="hintbtn">Підказка</button>
@@ -103,17 +120,9 @@
       <div id="status" class="status info"></div>
       <div id="counter" class="counter"></div>
       <div id="record" class="counter"></div>
-    </div>
-
-    <div class="card" style="max-width:420px">
-      <div style="font-weight:600;margin-bottom:10px">Фігури, які треба поставити</div>
-      <div id="pieces" class="pieces"></div>
-      <div style="font-weight:600;margin:16px 0 6px">Грані активної фігури</div>
-      <div id="faces" class="faces"></div>
       <div class="hint">
-        Клік по комірці малює активну фігуру (повторний клік — прибрати). Дано (білий контур) і підказки
-        (жовтий контур) зафіксовані. Можна знайти будь-який коректний розв'язок — не обов'язково той,
-        що в підказці. «Підказка»: 1-й клік підсвічує, куди стане наступна фігура; 2-й — ставить її.
+        Оберіть фігуру (колір) праворуч і грань зверху, далі клікайте по підсвічених клітинках.
+        Дано (білий) і підказки (жовтий) зафіксовані. «Підказка»: 1-й клік підсвічує наступну фігуру, 2-й — ставить.
       </div>
     </div>
   </div>
