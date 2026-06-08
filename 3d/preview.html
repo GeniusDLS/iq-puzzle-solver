@@ -24,7 +24,7 @@
 </head>
 <body>
   <div id="ui">
-    <h1>IQ Puzzler — 3D превʼю <span class="ver">3D v1.6 · 2026-06-08</span></h1>
+    <h1>IQ Puzzler — 3D превʼю <span class="ver">3D v1.7 · 2026-06-08</span></h1>
     <div class="row">
       <label for="part">Деталь:</label>
       <select id="part">
@@ -56,7 +56,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 
-const ball_d=10, cham=3.0, neck_w=4;
+const ball_d=10, cham=2.0, neck_w=4;
 const pitch=ball_d+2*0.3+1.5;   // 12.1 — uniform spacing in all directions
 const vlayer=pitch;
 const adj=(a,b)=>Math.abs(a[0]-b[0])+Math.abs(a[1]-b[1])+Math.abs(a[2]-b[2])===1;

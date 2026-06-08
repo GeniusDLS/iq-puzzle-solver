@@ -8,7 +8,7 @@ const path = require('path');
 
 // ---- params (keep in sync with iq_puzzle.scad) ----  cube side = 10 mm (1 cm)
 const ball_d=10;                             // cube side
-const cham=3.0;                              // chamfer cut on every cube edge (mm)
+const cham=2.0;                              // chamfer cut on every cube edge (mm)
 const gap=0.3;                               // clearance around pieces (free passage)
 const wall_in=1.5;                           // internal partition thickness between cells
 const pitch=ball_d+2*gap+wall_in;            // 12.1 — spacing (uniform in all directions)
@@ -122,7 +122,9 @@ function boardTris(){
     for(let dc=-1;dc<=1;dc++)for(let dr=-1;dr<=1;dr++){ const c=ci+dc,r=ri+dr;
       if(c<0||c>=COLS||r<0||r>=ROWS) continue;
       const Cx=c*pitch, Cy=-r*pitch;
-      cav=Math.min(cav, sBox(x,y,z,Cx,Cy,(floor+H+5)/2,wh,wh,(H+5-floor)/2));        // well
+      const seat=sCube(x,y,z,Cx,Cy,z_b)-gap;                                         // bevelled seat = cube contour
+      const shaft=sBox(x,y,z,Cx,Cy,(floor+cham+H+5)/2,wh,wh,(H+5-(floor+cham))/2);   // square shaft above (insertion)
+      cav=Math.min(cav, Math.min(seat,shaft));                                       // well = seat + shaft
       if(push_d>0) cav=Math.min(cav, sCyl(x,y,z,Cx,Cy,-5,floor+1,pr));               // push hole
       if(c<COLS-1) cav=Math.min(cav, sBox(x,y,z,Cx+pitch/2,Cy,(floor+H)/2,2,sh,(H-floor)/2));    // x neck slot
       if(r<ROWS-1) cav=Math.min(cav, sBox(x,y,z,Cx,Cy-pitch/2,(floor+H)/2,sh,2,(H-floor)/2));    // y neck slot

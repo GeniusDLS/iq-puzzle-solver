@@ -30,7 +30,7 @@
 </head>
 <body>
   <div id="ui">
-    <h1>3D параметри наживо <span class="ver">params v1.0</span></h1>
+    <h1>3D параметри наживо <span class="ver">params v1.1</span></h1>
     <div class="info">Крутіть повзунки — модель і STL перераховуються в браузері.
       <a href="preview.html">прев'ю</a> · <a href="../index.html">solver</a></div>
 
@@ -49,7 +49,7 @@
 
     <div class="grp"><div class="t">Кубик і проміжки</div>
       <div class="row"><label>Сторона куба</label><input id="ball_d" type="range" min="8" max="14" step="0.5" value="10"><span class="val" id="ball_d_v"></span></div>
-      <div class="row"><label>Фаска</label><input id="cham" type="range" min="0" max="4.5" step="0.25" value="3"><span class="val" id="cham_v"></span></div>
+      <div class="row"><label>Фаска</label><input id="cham" type="range" min="0" max="4.5" step="0.25" value="2"><span class="val" id="cham_v"></span></div>
       <div class="row"><label>Перетинка</label><input id="wall_in" type="range" min="0.8" max="4" step="0.1" value="1.5"><span class="val" id="wall_in_v"></span></div>
       <div class="row"><label>Зазор</label><input id="gap" type="range" min="0.1" max="0.6" step="0.05" value="0.3"><span class="val" id="gap_v"></span></div>
       <div class="row"><label>Шийка</label><input id="neck_w" type="range" min="2" max="6" step="0.5" value="4"><span class="val" id="neck_w_v"></span></div>
@@ -171,7 +171,7 @@ function pieceTris(P,balls,vox){
   const m=2*vox;return meshSDF(sdf,X0-m,Y0-m,-m,X1+m,Y1+m,Z1+m,vox);
 }
 function boardTris(P,vox){
-  const half=P.half,z_b=P.floor+half,H=z_b+P.vlayer;
+  const sCube=makeSCube(P),half=P.half,cham=P.cham,z_b=P.floor+half,H=z_b+P.vlayer;
   const edge=half+P.gap+P.wall,wh=half+P.gap,sh=P.neck_w/2+P.gap,pr=P.push_d/2;
   const bx0=-edge,bx1=(COLS-1)*P.pitch+edge,by0=-(ROWS-1)*P.pitch-edge,by1=edge;
   const bcx=(bx0+bx1)/2,bcy=(by0+by1)/2,hbx=(bx1-bx0)/2,hby=(by1-by0)/2;
@@ -180,7 +180,9 @@ function boardTris(P,vox){
     let cav=1e9;const ci=Math.round(x/P.pitch),ri=Math.round(-y/P.pitch);
     for(let dc=-1;dc<=1;dc++)for(let dr=-1;dr<=1;dr++){const c=ci+dc,r=ri+dr;if(c<0||c>=COLS||r<0||r>=ROWS)continue;
       const Cx=c*P.pitch,Cy=-r*P.pitch;
-      cav=Math.min(cav,sBox(x,y,z,Cx,Cy,(P.floor+H+5)/2,wh,wh,(H+5-P.floor)/2));
+      const seat=sCube(x,y,z,Cx,Cy,z_b)-P.gap;                                            // bevelled seat = cube contour
+      const shaft=sBox(x,y,z,Cx,Cy,(P.floor+cham+H+5)/2,wh,wh,(H+5-(P.floor+cham))/2);    // square shaft above
+      cav=Math.min(cav,Math.min(seat,shaft));
       if(P.push_d>0)cav=Math.min(cav,sCyl(x,y,z,Cx,Cy,-5,P.floor+1,pr));
       if(c<COLS-1)cav=Math.min(cav,sBox(x,y,z,Cx+P.pitch/2,Cy,(P.floor+H)/2,2,sh,(H-P.floor)/2));
       if(r<ROWS-1)cav=Math.min(cav,sBox(x,y,z,Cx,Cy-P.pitch/2,(P.floor+H)/2,sh,2,(H-P.floor)/2));
@@ -275,7 +277,7 @@ document.getElementById('dl').addEventListener('click',()=>{
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=curName+'.stl';a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),2000);
 });
-const defaults={ball_d:10,cham:3,wall_in:1.5,gap:0.3,neck_w:4,vlayer:12.1,floor:3,wall:3,push_d:5,detail:0.7};
+const defaults={ball_d:10,cham:2,wall_in:1.5,gap:0.3,neck_w:4,vlayer:12.1,floor:3,wall:3,push_d:5,detail:0.7};
 document.getElementById('reset').addEventListener('click',()=>{
   for(const k in defaults)document.getElementById(k).value=defaults[k];
   document.getElementById('uniform').checked=true;firstFit=true;schedule();

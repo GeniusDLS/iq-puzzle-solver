@@ -13,7 +13,7 @@ part = "demo";           // ["demo","board","all","A","B","C","D","E","F","G","H
 
 /* [Main dimensions, mm] — unit cube measured at 10 mm (1 cm) */
 ball_d  = 10;            // cube side
-cham    = 3.0;           // chamfer cut on every cube edge (truncated-cube look; flat bottom)
+cham    = 2.0;           // chamfer cut on every cube edge (truncated-cube look; flat bottom)
 wall_in = 1.5;           // internal partition thickness between cells (the waffle walls)
 gap     = 0.3;           // clearance around the pieces (free passage)
 neck_w  = 4;             // neck cross-section joining a piece's cubes
@@ -56,16 +56,16 @@ function adjacent(a,b) = (abs(a[0]-b[0]) + abs(a[1]-b[1]) + abs(a[2]-b[2])) == 1
 // A chamfered cube ("truncated cube"): the cube clipped by three 45deg diamond
 // prisms, one per axis pair, so all 12 edges are bevelled.  Flat octagonal
 // bottom -> great bed adhesion.
-module unit_solid(){
-  a = ball_d - cham;          // chamfer plane: |x|+|y| <= a  (etc.)
-  d = a*sqrt(2);
+module chamfered_cube(side, ch){
+  a = side - ch; d = a*sqrt(2);
   intersection(){
-    cube([ball_d, ball_d, ball_d], center=true);
-    rotate([0,0,45]) cube([d, d, ball_d*3], center=true);
-    rotate([45,0,0]) cube([ball_d*3, d, d], center=true);
-    rotate([0,45,0]) cube([d, ball_d*3, d], center=true);
+    cube([side, side, side], center=true);
+    rotate([0,0,45]) cube([d, d, side*3], center=true);
+    rotate([45,0,0]) cube([side*3, d, d], center=true);
+    rotate([0,45,0]) cube([d, side*3, d], center=true);
   }
 }
+module unit_solid(){ chamfered_cube(ball_d, cham); }
 module neck(p,q){ hull(){ translate(p) cube(neck_w,center=true); translate(q) cube(neck_w,center=true); } }
 
 module piece(balls){
@@ -84,8 +84,10 @@ module board(){
   bx = (COLS-1)*pitch + 2*edge; by = (ROWS-1)*pitch + 2*edge;
   difference(){
     translate([-edge, -(ROWS-1)*pitch-edge, 0]) cube([bx, by, H]);
-    for (r=[0:ROWS-1]) for (c=[0:COLS-1])                                   // square wells
-      translate([c*pitch-wh, -r*pitch-wh, floor]) cube([2*wh, 2*wh, H-floor+1]);
+    for (r=[0:ROWS-1]) for (c=[0:COLS-1]){                                  // wells: bevelled seat + shaft
+      translate([c*pitch, -r*pitch, z_bottom()]) chamfered_cube(ball_d+2*gap, cham);  // seat = cube contour
+      translate([c*pitch-wh, -r*pitch-wh, floor+cham]) cube([2*wh, 2*wh, H-floor-cham+1]); // square shaft above
+    }
     for (r=[0:ROWS-1]) for (c=[0:COLS-2])                                   // x neck slots
       translate([c*pitch+pitch/2-2, -r*pitch-sh, floor]) cube([4, 2*sh, H-floor+1]);
     for (r=[0:ROWS-2]) for (c=[0:COLS-1])                                   // y neck slots
