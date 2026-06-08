@@ -122,7 +122,7 @@
 </style>
 </head>
 <body>
-  <h1>Завдання з підказками <span class="ver">v2.6 · 2026-06-08</span></h1>
+  <h1>Завдання з підказками <span class="ver">v2.7 · 2026-06-08</span></h1>
   <div class="sub">Оберіть рівень → доставте відсутні фігури. Застрягли — тисніть «Підказка». <a class="navlink" href="index.html">← На головну</a> &nbsp;·&nbsp; <a class="navlink" href="3d/preview.html">3D-моделі →</a></div>
 
   <div class="layout">
@@ -373,12 +373,13 @@ function solve(startOccupied, startUsed, model, limitNodes, skip){
   // `remove` = how many pieces we try to take away from a full reference; the
   // generator only removes a piece while the puzzle keeps a UNIQUE solution, so
   // every challenge has exactly one answer (Expert removes as many as possible).
-  // `given` = number of pieces placed at the start (fewer = harder).
+  // `given` = number of pieces placed at the start (fewer = harder). All levels
+  // keep a UNIQUE solution (>=3 givens are needed for that; 2 is impossible).
   const LEVELS = [
-    { name:'Легке',   given:5 },
-    { name:'Середнє', given:4 },
-    { name:'Важке',   given:3 },
-    { name:'Експерт', given:2 },
+    { name:'Легке',   given:6 },
+    { name:'Середнє', given:5 },
+    { name:'Важке',   given:4 },
+    { name:'Експерт', given:3 },
   ];
   let level = 0;
 
@@ -460,6 +461,17 @@ function solve(startOccupied, startUsed, model, limitNodes, skip){
     if(!solve(occ,used,model,0,0).solved) return false; // reference always completes it
     return !solve(occ,used,model,0,1).solved;           // unique iff no 2nd solution
   }
+  // find `target` given pieces (from the reference) whose completion is unique
+  function findUniqueGivens(target){
+    const ids=PIECES.map(p=>p.id);
+    for(let a=0;a<300;a++){ const g=shuffle(ids.slice()).slice(0,target); if(uniqueWith(g)) return new Set(g); }
+    // fallback: greedy minimal-unique set, padded up to the target
+    let given=new Set(ids);
+    for(const pid of shuffle(ids.slice())){ const tr=new Set(given); tr.delete(pid); if(uniqueWith(tr)) given=tr; }
+    const removed=ids.filter(x=>!given.has(x)); let i=0;
+    while(given.size<target && i<removed.length) given.add(removed[i++]);
+    return given;
+  }
 
   function newChallenge(seed){
     curSeed = seed || randSeedStr();
@@ -469,14 +481,12 @@ function solve(startOccupied, startUsed, model, limitNodes, skip){
     if(!res.solved) res=solve(0n,new Set(),model,0,0);
     refByPiece={};
     res.placements.forEach(p=>refByPiece[p.pieceId]=p.cells.slice());
-    // place exactly `given` pieces as the clue (the rest must be solved)
-    const order=shuffle(PIECES.map(p=>p.id));
-    givenSet=new Set(order.slice(0, LEVELS[level].given));
+    givenSet = findUniqueGivens(LEVELS[level].given);   // clue with a unique completion
     hintedSet=new Set(); playerCells=new Map(); pendingHint=null; hintsUsed=0; solved=false;
     activePiece=(PIECES.find(p=>!givenSet.has(p.id))||{}).id||null; activeFace=0;
     renderLevels(); renderRecord(); updateUrl(); startTimer();
     const toPlace=PIECES.length-givenSet.size;
-    setStatus(`Рівень: <b>${LEVELS[level].name}</b> · код <b>${curSeed}</b> · дано <b>${givenSet.size}</b>, поставте <b>${toPlace}</b>.`,'info');
+    setStatus(`Рівень: <b>${LEVELS[level].name}</b> · код <b>${curSeed}</b> · <b>єдиний</b> розв'язок · дано <b>${givenSet.size}</b>, поставте <b>${toPlace}</b>.`,'info');
     render();
   }
 
