@@ -111,30 +111,24 @@ function pieceTris(balls){
   return meshSDF(sdf, X0-m,Y0-m,-m, X1+m,Y1+m,Z1+m, VOXP);
 }
 
-// ---- template: the 2 x 5 x 10 "master" that all pieces together fill ----
-// Used to CUT a mould, so each cell is a SOLID vertical pillar spanning both
-// layers (no waist between layers -> the cut is a continuous shaft); adjacent
-// pillars are joined by thin horizontal necks at each layer (these become the
-// wall slots). SDF localised to nearby cells so it stays fast.
+// ---- template: a single layer 5 x 10 of joined chamfered cubes ----
+// Just the connected cubes (one layer); finish the rest in CAD (Fusion).
 function templateTris(){
-  const Hpil=ball_d+vlayer, pcz=Hpil/2;            // pillar height & centre (spans z 0..Hpil)
-  const cen=(c,r,l)=>[c*pitch, -r*pitch, half + l*vlayer];
+  const cen=(c,r)=>[c*pitch, -r*pitch, half];
   const sdf=(x,y,z)=>{
     let d=1e9; const ci=Math.round(x/pitch), ri=Math.round(-y/pitch);
     for(let c=ci-1;c<=ci+1;c++)for(let r=ri-1;r<=ri+1;r++){
       if(c<0||c>=COLS||r<0||r>=ROWS) continue;
-      const Cx=c*pitch, Cy=-r*pitch;
-      d=Math.min(d, sChamBox(x,y,z,Cx,Cy,pcz,half,half,Hpil/2,cham));    // solid pillar (both layers)
-      for(let l=0;l<2;l++){ const A=cen(c,r,l);
-        if(c+1<COLS) d=Math.min(d, sNeck(x,y,z,A,cen(c+1,r,l)));         // horizontal necks per layer
-        if(r+1<ROWS) d=Math.min(d, sNeck(x,y,z,A,cen(c,r+1,l)));
-      }
+      const A=cen(c,r);
+      d=Math.min(d, sCube(x,y,z,A[0],A[1],A[2]));
+      if(c+1<COLS) d=Math.min(d, sNeck(x,y,z,A,cen(c+1,r)));    // horizontal necks
+      if(r+1<ROWS) d=Math.min(d, sNeck(x,y,z,A,cen(c,r+1)));
     }
     return d;
   };
   const m=2*VOX;
   return meshSDF(sdf, -half-m, -(ROWS-1)*pitch-half-m, -m,
-                      (COLS-1)*pitch+half+m, half+m, Hpil+m, VOX);
+                      (COLS-1)*pitch+half+m, half+m, ball_d+m, VOX);
 }
 
 function writeSTL(file,tris){

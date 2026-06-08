@@ -30,14 +30,14 @@
 </head>
 <body>
   <div id="ui">
-    <h1>3D параметри наживо <span class="ver">params v1.3</span></h1>
+    <h1>3D параметри наживо <span class="ver">params v1.4</span></h1>
     <div class="info">Крутіть повзунки — модель і STL перераховуються в браузері.
       <a href="preview.html">прев'ю</a> · <a href="../index.html">solver</a></div>
 
     <div class="row" style="margin-top:9px">
       <label>Деталь</label>
       <select id="part" style="flex:1">
-        <option value="template">Шаблон 2×5×10</option>
+        <option value="template">Шаблон 5×10×1</option>
         <option value="all">Усі фігури</option>
         <option value="A">A · Жовта</option><option value="B">B · Помаранчева</option>
         <option value="C">C · Рожева</option><option value="D">D · Червона</option>
@@ -167,24 +167,21 @@ function pieceTris(P,balls,vox){
   const m=2*vox;return meshSDF(sdf,X0-m,Y0-m,-m,X1+m,Y1+m,Z1+m,vox);
 }
 function templateTris(P,vox){
-  const sChamBox=makeSChamBox(P),sNeck=makeSNeck(P),half=P.half,pitch=P.pitch,vlayer=P.vlayer,ball_d=P.ball_d,cham=P.cham;
-  const Hpil=ball_d+vlayer,pcz=Hpil/2;
-  const cen=(c,r,l)=>[c*pitch,-r*pitch,half+l*vlayer];
+  const sCube=makeSCube(P),sNeck=makeSNeck(P),half=P.half,pitch=P.pitch,ball_d=P.ball_d;
+  const cen=(c,r)=>[c*pitch,-r*pitch,half];
   const sdf=(x,y,z)=>{
     let d=1e9;const ci=Math.round(x/pitch),ri=Math.round(-y/pitch);
     for(let c=ci-1;c<=ci+1;c++)for(let r=ri-1;r<=ri+1;r++){
       if(c<0||c>=COLS||r<0||r>=ROWS)continue;
-      const Cx=c*pitch,Cy=-r*pitch;
-      d=Math.min(d,sChamBox(x,y,z,Cx,Cy,pcz,half,half,Hpil/2));     // solid pillar (both layers)
-      for(let l=0;l<2;l++){const A=cen(c,r,l);
-        if(c+1<COLS)d=Math.min(d,sNeck(x,y,z,A,cen(c+1,r,l)));      // horizontal necks per layer
-        if(r+1<ROWS)d=Math.min(d,sNeck(x,y,z,A,cen(c,r+1,l)));
-      }
+      const A=cen(c,r);
+      d=Math.min(d,sCube(x,y,z,A[0],A[1],A[2]));
+      if(c+1<COLS)d=Math.min(d,sNeck(x,y,z,A,cen(c+1,r)));     // horizontal necks
+      if(r+1<ROWS)d=Math.min(d,sNeck(x,y,z,A,cen(c,r+1)));
     }
     return d;
   };
   const m=2*vox;
-  return meshSDF(sdf,-half-m,-(ROWS-1)*pitch-half-m,-m,(COLS-1)*pitch+half+m,half+m,Hpil+m,vox);
+  return meshSDF(sdf,-half-m,-(ROWS-1)*pitch-half-m,-m,(COLS-1)*pitch+half+m,half+m,ball_d+m,vox);
 }
 
 // tris -> geometry / STL
@@ -254,7 +251,7 @@ function rebuild(){
   const tcount=curTris.length;
   const tw=((COLS-1)*P.pitch+P.ball_d).toFixed(1);
   const th=((ROWS-1)*P.pitch+P.ball_d).toFixed(1);
-  const tz=(P.ball_d+P.vlayer).toFixed(1);
+  const tz=P.ball_d.toFixed(1);
   document.getElementById('status').textContent=`${tcount.toLocaleString()} трикутників · ${ms} мс`;
   document.getElementById('dims').innerHTML=
     `крок сітки <b>${P.pitch.toFixed(1)}</b> мм · верт. крок <b>${P.vlayer.toFixed(1)}</b> · шаблон <b>${tw}×${th}×${tz}</b> мм`;

@@ -6,7 +6,7 @@
 
 /* [What to render] */
 // "demo"     -> template (ghost) + piece A highlighted in place
-// "template" -> the full 2x5x10 block of joined cubes
+// "template" -> a single layer 5x10 of joined cubes
 // "all"      -> every piece laid out in a grid (for printing them together)
 // "A".."J"   -> a single piece by id
 part = "demo";           // ["demo","template","all","A","B","C","D","E","F","G","H","I","J"]
@@ -71,17 +71,13 @@ module piece(balls){
   }
 }
 
-// The 2 x 5 x 10 "master" all pieces fill.  Used to CUT a mould, so each cell is
-// a SOLID vertical pillar spanning both layers (continuous shaft); adjacent
-// pillars joined by thin horizontal necks at each layer (future wall slots).
+// A single layer 5 x 10 of joined chamfered cubes (finish the rest in CAD).
 module template(){
-  Hpil = ball_d + vlayer;
   union(){
-    for (c=[0:COLS-1]) for (r=[0:ROWS-1])
-      translate([c*pitch, -r*pitch, Hpil/2]) chamfered_box(ball_d, ball_d, Hpil, cham);
-    for (l=[0:1]) for (r=[0:ROWS-1]) for (c=[0:COLS-1]){
-      if (c<COLS-1) neck(ballpos([c,r,l]), ballpos([c+1,r,l]));
-      if (r<ROWS-1) neck(ballpos([c,r,l]), ballpos([c,r+1,l]));
+    for (c=[0:COLS-1]) for (r=[0:ROWS-1]) translate(ballpos([c,r,0])) unit_solid();
+    for (r=[0:ROWS-1]) for (c=[0:COLS-1]){
+      if (c<COLS-1) neck(ballpos([c,r,0]), ballpos([c+1,r,0]));
+      if (r<ROWS-1) neck(ballpos([c,r,0]), ballpos([c,r+1,0]));
     }
   }
 }

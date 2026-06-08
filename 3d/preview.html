@@ -24,12 +24,12 @@
 </head>
 <body>
   <div id="ui">
-    <h1>IQ Puzzler — 3D превʼю <span class="ver">3D v1.9 · 2026-06-08</span></h1>
+    <h1>IQ Puzzler — 3D превʼю <span class="ver">3D v2.0 · 2026-06-08</span></h1>
     <div class="row">
       <label for="part">Деталь:</label>
       <select id="part">
         <option value="all">Усі фігури</option>
-        <option value="template">Шаблон 2×5×10</option>
+        <option value="template">Шаблон 5×10×1</option>
         <option value="A">A · Жовта</option><option value="B">B · Помаранчева</option>
         <option value="C">C · Рожева</option><option value="D">D · Червона</option>
         <option value="E">E · Голуба</option><option value="F">F · Бірюзова</option>
@@ -119,19 +119,17 @@ function fit(obj){
 }
 function clear(){ scene.remove(group); group=new THREE.Group(); scene.add(group); }
 
-// template: solid vertical pillars (both layers) + thin horizontal necks per layer
+// template: a single layer 5 x 10 of joined chamfered cubes
 function buildTemplate(){
   const g=new THREE.Group();
   const mat=new THREE.MeshStandardMaterial({color:'#7c89b0',roughness:.55,metalness:.08});
-  const Hpil=ball_d+vlayer, pillar=chamBoxGeo(ball_d/2,ball_d/2,Hpil/2,cham);
-  for(let c=0;c<10;c++)for(let r=0;r<5;r++){ const m=new THREE.Mesh(pillar,mat);
-    m.position.set(c*pitch, vlayer/2, -r*pitch); g.add(m); }
+  for(let c=0;c<10;c++)for(let r=0;r<5;r++){ const m=new THREE.Mesh(unitGeo,mat); m.position.copy(pos([c,r,0])); g.add(m); }
   const bar=(a,b)=>{ const p0=pos(a),p1=pos(b);
     const sx=Math.abs(p1.x-p0.x)||neck_w, sy=Math.abs(p1.y-p0.y)||neck_w, sz=Math.abs(p1.z-p0.z)||neck_w;
     const m=new THREE.Mesh(new THREE.BoxGeometry(sx,sy,sz),mat); m.position.copy(p0).add(p1).multiplyScalar(.5); g.add(m); };
-  for(let l=0;l<2;l++)for(let r=0;r<5;r++)for(let c=0;c<10;c++){
-    if(c<9) bar([c,r,l],[c+1,r,l]);
-    if(r<4) bar([c,r,l],[c,r+1,l]);
+  for(let r=0;r<5;r++)for(let c=0;c<10;c++){
+    if(c<9) bar([c,r,0],[c+1,r,0]);
+    if(r<4) bar([c,r,0],[c,r+1,0]);
   }
   return g;
 }
