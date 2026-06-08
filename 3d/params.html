@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IQ Puzzler — 3D параметри наживо</title>
+<style>
+  :root{--bg:#0f1220;--panel:#181c2e;--line:#2c3350;--text:#e8ecff;--muted:#97a0c4;--accent:#5b8cff}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;overflow:hidden}
+  #ui{position:fixed;top:10px;left:10px;z-index:10;background:rgba(24,28,46,.94);border:1px solid var(--line);
+    border-radius:12px;padding:12px 14px;width:290px;max-height:calc(100vh - 20px);overflow:auto}
+  #ui h1{font-size:14px;margin:0 0 2px}
+  #ui h1 .ver{font-size:10px;font-weight:600;color:var(--muted);background:#20253c;border:1px solid var(--line);
+    border-radius:20px;padding:1px 7px;margin-left:4px;vertical-align:middle}
+  #ui a{color:var(--accent);text-decoration:none}
+  .row{display:flex;gap:8px;align-items:center;margin:7px 0}
+  .row label{flex:0 0 96px;font-size:12px;color:var(--muted)}
+  .row input[type=range]{flex:1;min-width:0}
+  .row .val{flex:0 0 42px;text-align:right;font-size:12px;font-variant-numeric:tabular-nums}
+  select,button{background:#20253c;color:var(--text);border:1px solid var(--line);border-radius:8px;
+    padding:6px 9px;font-size:13px;cursor:pointer}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#0b1020;font-weight:600}
+  .grp{border-top:1px solid var(--line);margin-top:9px;padding-top:7px}
+  .grp .t{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:3px}
+  .info{font-size:11px;color:var(--muted);line-height:1.5;margin-top:6px}
+  #status{font-size:12px;color:var(--accent);min-height:14px;margin-top:4px}
+  canvas{display:block}
+</style>
+</head>
+<body>
+  <div id="ui">
+    <h1>3D параметри наживо <span class="ver">params v1.0</span></h1>
+    <div class="info">Крутіть повзунки — модель і STL перераховуються в браузері.
+      <a href="preview.html">прев'ю</a> · <a href="../index.html">solver</a></div>
+
+    <div class="row" style="margin-top:9px">
+      <label>Деталь</label>
+      <select id="part" style="flex:1">
+        <option value="board">Дошка</option>
+        <option value="all">Усі фігури</option>
+        <option value="A">A · Жовта</option><option value="B">B · Помаранчева</option>
+        <option value="C">C · Рожева</option><option value="D">D · Червона</option>
+        <option value="E">E · Голуба</option><option value="F">F · Бірюзова</option>
+        <option value="G">G · Фіолетова</option><option value="H">H · Синя</option>
+        <option value="I">I · Салатова</option><option value="J">J · Зелена</option>
+      </select>
+    </div>
+
+    <div class="grp"><div class="t">Кубик і проміжки</div>
+      <div class="row"><label>Сторона куба</label><input id="ball_d" type="range" min="8" max="14" step="0.5" value="10"><span class="val" id="ball_d_v"></span></div>
+      <div class="row"><label>Фаска</label><input id="cham" type="range" min="0" max="4.5" step="0.25" value="3"><span class="val" id="cham_v"></span></div>
+      <div class="row"><label>Перетинка</label><input id="wall_in" type="range" min="0.8" max="4" step="0.1" value="1.5"><span class="val" id="wall_in_v"></span></div>
+      <div class="row"><label>Зазор</label><input id="gap" type="range" min="0.1" max="0.6" step="0.05" value="0.3"><span class="val" id="gap_v"></span></div>
+      <div class="row"><label>Шийка</label><input id="neck_w" type="range" min="2" max="6" step="0.5" value="4"><span class="val" id="neck_w_v"></span></div>
+      <div class="row"><label>Верт. крок</label><input id="vlayer" type="range" min="10" max="16" step="0.1" value="12.1"><span class="val" id="vlayer_v"></span></div>
+      <div class="row"><label style="flex:1"><input id="uniform" type="checkbox" checked> верт. крок = крок сітки</label></div>
+    </div>
+
+    <div class="grp"><div class="t">Дошка</div>
+      <div class="row"><label>Дно</label><input id="floor" type="range" min="1" max="5" step="0.5" value="3"><span class="val" id="floor_v"></span></div>
+      <div class="row"><label>Зовн. стінка</label><input id="wall" type="range" min="1.5" max="5" step="0.5" value="3"><span class="val" id="wall_v"></span></div>
+      <div class="row"><label>Виштовх. ⌀</label><input id="push_d" type="range" min="0" max="7" step="0.5" value="5"><span class="val" id="push_d_v"></span></div>
+    </div>
+
+    <div class="grp"><div class="t">Якість мешу</div>
+      <div class="row"><label>Воксель, мм</label><input id="detail" type="range" min="0.4" max="1.1" step="0.05" value="0.7"><span class="val" id="detail_v"></span></div>
+      <div class="info" style="margin-top:2px">менше = гладше, але повільніше</div>
+    </div>
+
+    <div class="grp">
+      <div class="row" style="gap:6px">
+        <button class="primary" id="dl" style="flex:1">⬇ Завантажити STL</button>
+        <button id="reset">Скинути</button>
+      </div>
+      <div id="status"></div>
+      <div class="info" id="dims"></div>
+    </div>
+  </div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const PIECES = {
+  A:{c:'#f5a623',b:[[0,0,0],[0,0,1],[1,0,0],[1,0,1],[2,0,0],[3,0,0],[3,1,0]]},
+  B:{c:'#ff6d00',b:[[0,0,0],[1,0,0],[1,0,1],[1,1,0],[2,0,0],[3,0,0],[3,0,1]]},
+  C:{c:'#ff5dba',b:[[0,0,0],[0,1,0],[1,0,0],[1,0,1],[1,1,0],[2,0,0],[3,0,0]]},
+  D:{c:'#e8174a',b:[[0,0,0],[0,0,1],[0,1,0],[1,0,0],[2,0,0],[3,0,0],[3,0,1]]},
+  E:{c:'#29b6f6',b:[[0,0,0],[0,0,1],[0,1,0],[1,0,0],[2,0,0],[2,0,1],[3,0,0]]},
+  F:{c:'#1abc9c',b:[[0,0,0],[1,0,0],[1,0,1],[2,0,0],[2,0,1],[2,1,0],[3,0,0]]},
+  G:{c:'#8e44ad',b:[[0,0,0],[0,0,1],[1,0,0],[1,1,0],[2,0,0],[2,1,0]]},
+  H:{c:'#2962ff',b:[[0,0,0],[0,1,0],[1,0,0],[1,0,1],[2,0,0],[2,1,0]]},
+  I:{c:'#a4d233',b:[[0,0,0],[0,0,1],[0,1,0],[1,0,0],[2,0,0],[2,1,0]]},
+  J:{c:'#2ecc40',b:[[0,0,0],[0,1,0],[1,0,0],[1,0,1],[1,1,0],[2,0,0]]},
+};
+const ROWS=5, COLS=10;
+const gMan=(a,b)=>Math.abs(a[0]-b[0])+Math.abs(a[1]-b[1])+Math.abs(a[2]-b[2]);
+
+// ---------- geometry (mirrors gen_stl.js) ----------
+const sBox=(px,py,pz,ax,ay,az,hx,hy,hz)=>{const qx=Math.abs(px-ax)-hx,qy=Math.abs(py-ay)-hy,qz=Math.abs(pz-az)-hz;
+  return Math.hypot(Math.max(qx,0),Math.max(qy,0),Math.max(qz,0))+Math.min(Math.max(qx,qy,qz),0);};
+const sCyl=(px,py,pz,ax,ay,z0,z1,r)=>{const dxy=Math.hypot(px-ax,py-ay)-r,dz=Math.abs(pz-(z0+z1)/2)-(z1-z0)/2;
+  return Math.hypot(Math.max(dxy,0),Math.max(dz,0))+Math.min(Math.max(dxy,dz),0);};
+function makeSCube(P){const half=P.ball_d/2,ACH=P.ball_d-P.cham;
+  return (px,py,pz,cx,cy,cz)=>{const x=px-cx,y=py-cy,z=pz-cz;
+    const box=sBox(x,y,z,0,0,0,half,half,half);
+    const d1=(Math.abs(x)+Math.abs(y)-ACH)/Math.SQRT2, d2=(Math.abs(y)+Math.abs(z)-ACH)/Math.SQRT2, d3=(Math.abs(x)+Math.abs(z)-ACH)/Math.SQRT2;
+    return Math.max(box,d1,d2,d3);};}
+function makeSNeck(P){const nw=P.neck_w;
+  return (px,py,pz,a,b)=>{const cx=(a[0]+b[0])/2,cy=(a[1]+b[1])/2,cz=(a[2]+b[2])/2;
+    const hx=a[0]!==b[0]?Math.abs(a[0]-b[0])/2:nw/2, hy=a[1]!==b[1]?Math.abs(a[1]-b[1])/2:nw/2, hz=a[2]!==b[2]?Math.abs(a[2]-b[2])/2:nw/2;
+    return sBox(px,py,pz,cx,cy,cz,hx,hy,hz);};}
+
+function meshSDF(sdf,X0,Y0,Z0,X1,Y1,Z1,h){
+  const Nx=Math.ceil((X1-X0)/h),Ny=Math.ceil((Y1-Y0)/h),Nz=Math.ceil((Z1-Z0)/h);
+  const gy=Ny+1,gz=Nz+1,VX=i=>X0+i*h,VY=j=>Y0+j*h,VZ=k=>Z0+k*h;
+  const f=new Float32Array((Nx+1)*gy*gz),vid=(i,j,k)=>(i*gy+j)*gz+k;
+  for(let i=0;i<=Nx;i++)for(let j=0;j<=Ny;j++)for(let k=0;k<=Nz;k++)f[vid(i,j,k)]=sdf(VX(i),VY(j),VZ(k));
+  const cellV=new Int32Array(Nx*Ny*Nz).fill(-1),cid=(i,j,k)=>(i*Ny+j)*Nz+k,verts=[];
+  const CO=[[0,0,0],[1,0,0],[0,1,0],[1,1,0],[0,0,1],[1,0,1],[0,1,1],[1,1,1]];
+  const EDG=[[0,1],[0,2],[0,4],[1,3],[1,5],[2,3],[2,6],[3,7],[4,5],[4,6],[5,7],[6,7]];
+  for(let i=0;i<Nx;i++)for(let j=0;j<Ny;j++)for(let k=0;k<Nz;k++){
+    const cv=[];for(const o of CO)cv.push(f[vid(i+o[0],j+o[1],k+o[2])]);
+    let neg=0;for(const v of cv)if(v<0)neg++;if(neg===0||neg===8)continue;
+    let sx=0,sy=0,sz=0,n=0;
+    for(const e of EDG){const fa=cv[e[0]],fb=cv[e[1]];if((fa<0)===(fb<0))continue;
+      const t=fa/(fa-fb),A=CO[e[0]],B=CO[e[1]];
+      sx+=VX(i+A[0]+t*(B[0]-A[0]));sy+=VY(j+A[1]+t*(B[1]-A[1]));sz+=VZ(k+A[2]+t*(B[2]-A[2]));n++;}
+    cellV[cid(i,j,k)]=verts.length;verts.push([sx/n,sy/n,sz/n]);
+  }
+  const tris=[];
+  const quad=(a,b,c,d,flip)=>{if(a<0||b<0||c<0||d<0)return;const A=verts[a],B=verts[b],C=verts[c],D=verts[d];
+    if(!flip){tris.push([A,B,C]);tris.push([A,C,D]);}else{tris.push([A,C,B]);tris.push([A,D,C]);}};
+  for(let i=1;i<Nx;i++)for(let j=1;j<Ny;j++)for(let k=0;k<Nz;k++){const s0=f[vid(i,j,k)]<0,s1=f[vid(i,j,k+1)]<0;if(s0===s1)continue;
+    quad(cellV[cid(i-1,j-1,k)],cellV[cid(i,j-1,k)],cellV[cid(i,j,k)],cellV[cid(i-1,j,k)],s0);}
+  for(let i=1;i<Nx;i++)for(let j=0;j<Ny;j++)for(let k=1;k<Nz;k++){const s0=f[vid(i,j,k)]<0,s1=f[vid(i,j+1,k)]<0;if(s0===s1)continue;
+    quad(cellV[cid(i-1,j,k-1)],cellV[cid(i,j,k-1)],cellV[cid(i,j,k)],cellV[cid(i-1,j,k)],!s0);}
+  for(let i=0;i<Nx;i++)for(let j=1;j<Ny;j++)for(let k=1;k<Nz;k++){const s0=f[vid(i,j,k)]<0,s1=f[vid(i+1,j,k)]<0;if(s0===s1)continue;
+    quad(cellV[cid(i,j-1,k-1)],cellV[cid(i,j,k-1)],cellV[cid(i,j,k)],cellV[cid(i,j-1,k)],s0);}
+  const eps=h*0.5;
+  for(const t of tris){
+    const ax=t[1][0]-t[0][0],ay=t[1][1]-t[0][1],az=t[1][2]-t[0][2],bx=t[2][0]-t[0][0],by=t[2][1]-t[0][1],bz=t[2][2]-t[0][2];
+    const nx=ay*bz-az*by,ny=az*bx-ax*bz,nz=ax*by-ay*bx;
+    const cx=(t[0][0]+t[1][0]+t[2][0])/3,cy=(t[0][1]+t[1][1]+t[2][1])/3,cz=(t[0][2]+t[1][2]+t[2][2])/3;
+    const gx=sdf(cx+eps,cy,cz)-sdf(cx-eps,cy,cz),gv=sdf(cx,cy+eps,cz)-sdf(cx,cy-eps,cz),gw=sdf(cx,cy,cz+eps)-sdf(cx,cy,cz-eps);
+    if(nx*gx+ny*gv+nz*gw<0){const tmp=t[1];t[1]=t[2];t[2]=tmp;}
+  }
+  return tris;
+}
+
+function derive(P){
+  P.pitch=P.ball_d+2*P.gap+P.wall_in;
+  P.vlayer=P.uniform?P.pitch:P.vlayerRaw;
+  P.half=P.ball_d/2;
+  return P;
+}
+function pieceTris(P,balls,vox){
+  const sCube=makeSCube(P),sNeck=makeSNeck(P),half=P.half;
+  const C=balls.map(b=>[b[0]*P.pitch,-b[1]*P.pitch,half+b[2]*P.vlayer]);
+  const pairs=[];for(let i=0;i<balls.length;i++)for(let j=i+1;j<balls.length;j++)if(gMan(balls[i],balls[j])===1)pairs.push([C[i],C[j]]);
+  const sdf=(x,y,z)=>{let d=1e9;for(const c of C)d=Math.min(d,sCube(x,y,z,c[0],c[1],c[2]));for(const p of pairs)d=Math.min(d,sNeck(x,y,z,p[0],p[1]));return d;};
+  let X0=1e9,Y0=1e9,X1=-1e9,Y1=-1e9,Z1=-1e9;
+  for(const c of C){X0=Math.min(X0,c[0]-half);X1=Math.max(X1,c[0]+half);Y0=Math.min(Y0,c[1]-half);Y1=Math.max(Y1,c[1]+half);Z1=Math.max(Z1,c[2]+half);}
+  const m=2*vox;return meshSDF(sdf,X0-m,Y0-m,-m,X1+m,Y1+m,Z1+m,vox);
+}
+function boardTris(P,vox){
+  const half=P.half,z_b=P.floor+half,H=z_b+P.vlayer;
+  const edge=half+P.gap+P.wall,wh=half+P.gap,sh=P.neck_w/2+P.gap,pr=P.push_d/2;
+  const bx0=-edge,bx1=(COLS-1)*P.pitch+edge,by0=-(ROWS-1)*P.pitch-edge,by1=edge;
+  const bcx=(bx0+bx1)/2,bcy=(by0+by1)/2,hbx=(bx1-bx0)/2,hby=(by1-by0)/2;
+  const sdf=(x,y,z)=>{
+    const block=sBox(x,y,z,bcx,bcy,H/2,hbx,hby,H/2);
+    let cav=1e9;const ci=Math.round(x/P.pitch),ri=Math.round(-y/P.pitch);
+    for(let dc=-1;dc<=1;dc++)for(let dr=-1;dr<=1;dr++){const c=ci+dc,r=ri+dr;if(c<0||c>=COLS||r<0||r>=ROWS)continue;
+      const Cx=c*P.pitch,Cy=-r*P.pitch;
+      cav=Math.min(cav,sBox(x,y,z,Cx,Cy,(P.floor+H+5)/2,wh,wh,(H+5-P.floor)/2));
+      if(P.push_d>0)cav=Math.min(cav,sCyl(x,y,z,Cx,Cy,-5,P.floor+1,pr));
+      if(c<COLS-1)cav=Math.min(cav,sBox(x,y,z,Cx+P.pitch/2,Cy,(P.floor+H)/2,2,sh,(H-P.floor)/2));
+      if(r<ROWS-1)cav=Math.min(cav,sBox(x,y,z,Cx,Cy-P.pitch/2,(P.floor+H)/2,sh,2,(H-P.floor)/2));
+    }
+    return Math.max(block,-cav);
+  };
+  const m=2*vox;return meshSDF(sdf,bx0-m,by0-m,-m,bx1+m,by1+m,H+m,vox);
+}
+
+// tris -> geometry / STL
+function trisToGeom(tris){
+  const pos=new Float32Array(tris.length*9);let o=0;
+  for(const t of tris)for(const v of t){pos[o++]=v[0];pos[o++]=v[1];pos[o++]=v[2];}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(pos,3));g.computeVertexNormals();return g;
+}
+function trisToSTL(tris){
+  const buf=new ArrayBuffer(84+tris.length*50),dv=new DataView(buf);dv.setUint32(80,tris.length,true);let o=84;
+  for(const t of tris){
+    const ux=t[1][0]-t[0][0],uy=t[1][1]-t[0][1],uz=t[1][2]-t[0][2],vx=t[2][0]-t[0][0],vy=t[2][1]-t[0][1],vz=t[2][2]-t[0][2];
+    let nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;const L=Math.hypot(nx,ny,nz)||1;nx/=L;ny/=L;nz/=L;
+    dv.setFloat32(o,nx,true);dv.setFloat32(o+4,ny,true);dv.setFloat32(o+8,nz,true);o+=12;
+    for(const v of t){dv.setFloat32(o,v[0],true);dv.setFloat32(o+4,v[1],true);dv.setFloat32(o+8,v[2],true);o+=12;}
+    o+=2;
+  }
+  return buf;
+}
+function offsetTris(tris,dx,dy){return tris.map(t=>t.map(v=>[v[0]+dx,v[1]+dy,v[2]]));}
+
+// ---------- three.js ----------
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+document.body.appendChild(renderer.domElement);
+const scene=new THREE.Scene();scene.background=new THREE.Color('#0f1220');
+const camera=new THREE.PerspectiveCamera(45,innerWidth/innerHeight,0.1,4000);
+const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;
+scene.add(new THREE.HemisphereLight(0xffffff,0x223044,1.1));
+const dir=new THREE.DirectionalLight(0xffffff,1.4);dir.position.set(80,140,100);scene.add(dir);
+let group=new THREE.Group();scene.add(group);
+let firstFit=true;
+function clearGroup(){for(const m of group.children){m.geometry&&m.geometry.dispose();m.material&&m.material.dispose();}
+  group.clear();group.position.set(0,0,0);}
+function fit(obj){const box=new THREE.Box3().setFromObject(obj);const s=new THREE.Vector3(),c=new THREE.Vector3();
+  box.getSize(s);box.getCenter(c);obj.position.sub(c);const R=Math.max(s.x,s.y,s.z)||40;
+  if(firstFit){camera.position.set(R*0.8,R*0.9,R*1.5);controls.target.set(0,0,0);camera.lookAt(0,0,0);firstFit=false;}}
+
+// up = +Z (model space); rotate so Z is up in view
+function addMesh(tris,color){const g=trisToGeom(tris);
+  const m=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color,roughness:.55,metalness:.08,flatShading:true,side:THREE.DoubleSide}));
+  m.rotation.x=-Math.PI/2;group.add(m);}
+
+const ids=['ball_d','cham','wall_in','gap','neck_w','vlayer','floor','wall','push_d','detail'];
+function readParams(){
+  const g=id=>parseFloat(document.getElementById(id).value);
+  ids.forEach(id=>{const el=document.getElementById(id+'_v');if(el)el.textContent=g(id);});
+  const P={ball_d:g('ball_d'),cham:g('cham'),wall_in:g('wall_in'),gap:g('gap'),neck_w:g('neck_w'),
+    uniform:document.getElementById('uniform').checked,vlayerRaw:g('vlayer'),
+    floor:g('floor'),wall:g('wall'),push_d:g('push_d')};
+  document.getElementById('vlayer').disabled=P.uniform;
+  return derive(P);
+}
+let curTris=null,curName='';
+function rebuild(){
+  const P=readParams();const part=document.getElementById('part').value;
+  const vox=parseFloat(document.getElementById('detail').value);
+  const t0=performance.now();
+  clearGroup();
+  if(part==='all'){const sp=P.pitch;let all=[];Object.keys(PIECES).forEach((k,i)=>{const col=i%5,row=Math.floor(i/5);
+      const t=offsetTris(pieceTris(P,PIECES[k].b,vox),col*(5*P.pitch+sp),-row*(3*P.pitch+sp));
+      addMesh(t,PIECES[k].c);all=all.concat(t);});
+    curTris=all;curName='all_pieces_custom';}
+  else if(part==='board'){curTris=boardTris(P,vox);curName='board_custom';addMesh(curTris,'#7c89b0');}
+  else{curTris=pieceTris(P,PIECES[part].b,vox);curName='piece_'+part+'_custom';addMesh(curTris,PIECES[part].c);}
+  fit(group);
+  const ms=Math.round(performance.now()-t0);
+  const tcount=curTris.length;
+  const H=(P.floor+P.ball_d/2+P.vlayer).toFixed(1);
+  const bw=((COLS-1)*P.pitch+2*(P.ball_d/2+P.gap+P.wall)).toFixed(1);
+  const bh=((ROWS-1)*P.pitch+2*(P.ball_d/2+P.gap+P.wall)).toFixed(1);
+  document.getElementById('status').textContent=`${tcount.toLocaleString()} трикутників · ${ms} мс`;
+  document.getElementById('dims').innerHTML=
+    `крок сітки <b>${P.pitch.toFixed(1)}</b> мм · верт. крок <b>${P.vlayer.toFixed(1)}</b> · дошка <b>${bw}×${bh}×${H}</b> мм`;
+}
+
+let timer=null;
+function schedule(){document.getElementById('status').textContent='рахую…';clearTimeout(timer);timer=setTimeout(rebuild,160);}
+ids.concat(['part','uniform']).forEach(id=>{const el=document.getElementById(id);
+  el.addEventListener('input',schedule);el.addEventListener('change',schedule);});
+document.getElementById('part').addEventListener('change',()=>{firstFit=true;schedule();});
+
+document.getElementById('dl').addEventListener('click',()=>{
+  if(!curTris)return;const buf=trisToSTL(curTris);const blob=new Blob([buf],{type:'application/octet-stream'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=curName+'.stl';a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+});
+const defaults={ball_d:10,cham:3,wall_in:1.5,gap:0.3,neck_w:4,vlayer:12.1,floor:3,wall:3,push_d:5,detail:0.7};
+document.getElementById('reset').addEventListener('click',()=>{
+  for(const k in defaults)document.getElementById(k).value=defaults[k];
+  document.getElementById('uniform').checked=true;firstFit=true;schedule();
+});
+
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+(function loop(){requestAnimationFrame(loop);controls.update();renderer.render(scene,camera);})();
+rebuild();
+</script>
+</body>
+</html>
