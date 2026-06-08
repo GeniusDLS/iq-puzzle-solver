@@ -7,11 +7,12 @@ const fs = require('fs');
 const path = require('path');
 
 // ---- params (keep in sync with iq_puzzle.scad) ----  cube side = 10 mm (1 cm)
-const ball_d=10, vlayer=10;                  // cube side, vertical layer step (cubes touch vertically)
+const ball_d=10;                             // cube side
 const cham=3.0;                              // chamfer cut on every cube edge (mm)
 const gap=0.3;                               // clearance around pieces (free passage)
-const wall_in=3;                             // internal partition thickness between cells
-const pitch=ball_d+2*gap+wall_in;            // 13.6 — in-plane centre-to-centre spacing
+const wall_in=1.5;                           // internal partition thickness between cells
+const pitch=ball_d+2*gap+wall_in;            // 12.1 — spacing (uniform in all directions)
+const vlayer=pitch;                          // vertical spacing == horizontal (cubes spaced everywhere)
 const neck_w=4;                              // neck cross-section joining a piece's cubes
 const wall=3, floor=3, push_d=5;             // outer wall, floor, push-out hole under each cell
 const VOX=0.7;    // voxel size for the board mesh

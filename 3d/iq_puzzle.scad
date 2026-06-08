@@ -13,12 +13,12 @@ part = "demo";           // ["demo","board","all","A","B","C","D","E","F","G","H
 
 /* [Main dimensions, mm] — unit cube measured at 10 mm (1 cm) */
 ball_d  = 10;            // cube side
-vlayer  = 10;            // vertical layer step (cubes touch vertically)
 cham    = 3.0;           // chamfer cut on every cube edge (truncated-cube look; flat bottom)
-wall_in = 3;             // internal partition thickness between cells (the waffle walls)
+wall_in = 1.5;           // internal partition thickness between cells (the waffle walls)
 gap     = 0.3;           // clearance around the pieces (free passage)
 neck_w  = 4;             // neck cross-section joining a piece's cubes
-pitch   = ball_d + 2*gap + wall_in;   // 13.6 — in-plane centre-to-centre spacing
+pitch   = ball_d + 2*gap + wall_in;   // 12.1 — spacing (uniform in all directions)
+vlayer  = pitch;         // vertical spacing == horizontal (cubes spaced everywhere)
 
 /* [Board outer] */
 wall   = 3;     // outer wall thickness
