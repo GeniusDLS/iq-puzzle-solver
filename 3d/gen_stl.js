@@ -41,13 +41,15 @@ const sBox=(px,py,pz,ax,ay,az,hx,hy,hz)=>{ const qx=Math.abs(px-ax)-hx,qy=Math.a
   return Math.hypot(Math.max(qx,0),Math.max(qy,0),Math.max(qz,0))+Math.min(Math.max(qx,qy,qz),0); };
 const sCyl=(px,py,pz,ax,ay,z0,z1,r)=>{ const dxy=Math.hypot(px-ax,py-ay)-r, dz=Math.abs(pz-(z0+z1)/2)-(z1-z0)/2;
   return Math.hypot(Math.max(dxy,0),Math.max(dz,0))+Math.min(Math.max(dxy,dz),0); };
-// chamfered cube centred at (cx,cy,cz): cube clipped by three 45deg diamond prisms
-const sCube=(px,py,pz,cx,cy,cz)=>{ const x=px-cx,y=py-cy,z=pz-cz;
-  const box=sBox(x,y,z,0,0,0,half,half,half);
-  const d1=(Math.abs(x)+Math.abs(y)-ACH)/Math.SQRT2;
-  const d2=(Math.abs(y)+Math.abs(z)-ACH)/Math.SQRT2;
-  const d3=(Math.abs(x)+Math.abs(z)-ACH)/Math.SQRT2;
+// chamfered box centred at (cx,cy,cz), half-extents (hx,hy,hz), chamfer ch on all edges
+const sChamBox=(px,py,pz,cx,cy,cz,hx,hy,hz,ch)=>{ const x=px-cx,y=py-cy,z=pz-cz;
+  const box=sBox(x,y,z,0,0,0,hx,hy,hz);
+  const d1=(Math.abs(x)+Math.abs(y)-(hx+hy-ch))/Math.SQRT2;
+  const d2=(Math.abs(y)+Math.abs(z)-(hy+hz-ch))/Math.SQRT2;
+  const d3=(Math.abs(x)+Math.abs(z)-(hx+hz-ch))/Math.SQRT2;
   return Math.max(box,d1,d2,d3); };
+// chamfered cube = chamfered box with equal extents
+const sCube=(px,py,pz,cx,cy,cz)=>sChamBox(px,py,pz,cx,cy,cz,half,half,half,cham);
 // neck bar between two cube centres a,b (square section neck_w, spanning centre-to-centre)
 const sNeck=(px,py,pz,a,b)=>{ const cx=(a[0]+b[0])/2,cy=(a[1]+b[1])/2,cz=(a[2]+b[2])/2;
   const hx=a[0]!==b[0]?Math.abs(a[0]-b[0])/2:neck_w/2;
@@ -109,27 +111,30 @@ function pieceTris(balls){
   return meshSDF(sdf, X0-m,Y0-m,-m, X1+m,Y1+m,Z1+m, VOXP);
 }
 
-// ---- template: the full 2 x 5 x 10 block of chamfered cubes joined by necks ----
-// (one solid "master" that all pieces together fill).  SDF localised to nearby
-// cells so it stays fast even with 100 cubes.
+// ---- template: the 2 x 5 x 10 "master" that all pieces together fill ----
+// Used to CUT a mould, so each cell is a SOLID vertical pillar spanning both
+// layers (no waist between layers -> the cut is a continuous shaft); adjacent
+// pillars are joined by thin horizontal necks at each layer (these become the
+// wall slots). SDF localised to nearby cells so it stays fast.
 function templateTris(){
+  const Hpil=ball_d+vlayer, pcz=Hpil/2;            // pillar height & centre (spans z 0..Hpil)
   const cen=(c,r,l)=>[c*pitch, -r*pitch, half + l*vlayer];
   const sdf=(x,y,z)=>{
     let d=1e9; const ci=Math.round(x/pitch), ri=Math.round(-y/pitch);
     for(let c=ci-1;c<=ci+1;c++)for(let r=ri-1;r<=ri+1;r++){
       if(c<0||c>=COLS||r<0||r>=ROWS) continue;
+      const Cx=c*pitch, Cy=-r*pitch;
+      d=Math.min(d, sChamBox(x,y,z,Cx,Cy,pcz,half,half,Hpil/2,cham));    // solid pillar (both layers)
       for(let l=0;l<2;l++){ const A=cen(c,r,l);
-        d=Math.min(d, sCube(x,y,z,A[0],A[1],A[2]));
-        if(c+1<COLS) d=Math.min(d, sNeck(x,y,z,A,cen(c+1,r,l)));
+        if(c+1<COLS) d=Math.min(d, sNeck(x,y,z,A,cen(c+1,r,l)));         // horizontal necks per layer
         if(r+1<ROWS) d=Math.min(d, sNeck(x,y,z,A,cen(c,r+1,l)));
-        if(l===0)    d=Math.min(d, sNeck(x,y,z,A,cen(c,r,1)));
       }
     }
     return d;
   };
   const m=2*VOX;
   return meshSDF(sdf, -half-m, -(ROWS-1)*pitch-half-m, -m,
-                      (COLS-1)*pitch+half+m, half+m, ball_d+vlayer+m, VOX);
+                      (COLS-1)*pitch+half+m, half+m, Hpil+m, VOX);
 }
 
 function writeSTL(file,tris){

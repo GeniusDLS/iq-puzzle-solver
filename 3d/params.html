@@ -30,7 +30,7 @@
 </head>
 <body>
   <div id="ui">
-    <h1>3D параметри наживо <span class="ver">params v1.2</span></h1>
+    <h1>3D параметри наживо <span class="ver">params v1.3</span></h1>
     <div class="info">Крутіть повзунки — модель і STL перераховуються в браузері.
       <a href="preview.html">прев'ю</a> · <a href="../index.html">solver</a></div>
 
@@ -102,11 +102,13 @@ const sBox=(px,py,pz,ax,ay,az,hx,hy,hz)=>{const qx=Math.abs(px-ax)-hx,qy=Math.ab
   return Math.hypot(Math.max(qx,0),Math.max(qy,0),Math.max(qz,0))+Math.min(Math.max(qx,qy,qz),0);};
 const sCyl=(px,py,pz,ax,ay,z0,z1,r)=>{const dxy=Math.hypot(px-ax,py-ay)-r,dz=Math.abs(pz-(z0+z1)/2)-(z1-z0)/2;
   return Math.hypot(Math.max(dxy,0),Math.max(dz,0))+Math.min(Math.max(dxy,dz),0);};
-function makeSCube(P){const half=P.ball_d/2,ACH=P.ball_d-P.cham;
-  return (px,py,pz,cx,cy,cz)=>{const x=px-cx,y=py-cy,z=pz-cz;
-    const box=sBox(x,y,z,0,0,0,half,half,half);
-    const d1=(Math.abs(x)+Math.abs(y)-ACH)/Math.SQRT2, d2=(Math.abs(y)+Math.abs(z)-ACH)/Math.SQRT2, d3=(Math.abs(x)+Math.abs(z)-ACH)/Math.SQRT2;
+function makeSChamBox(P){const ch=P.cham;
+  return (px,py,pz,cx,cy,cz,hx,hy,hz)=>{const x=px-cx,y=py-cy,z=pz-cz;
+    const box=sBox(x,y,z,0,0,0,hx,hy,hz);
+    const d1=(Math.abs(x)+Math.abs(y)-(hx+hy-ch))/Math.SQRT2, d2=(Math.abs(y)+Math.abs(z)-(hy+hz-ch))/Math.SQRT2, d3=(Math.abs(x)+Math.abs(z)-(hx+hz-ch))/Math.SQRT2;
     return Math.max(box,d1,d2,d3);};}
+function makeSCube(P){const cb=makeSChamBox(P),half=P.ball_d/2;
+  return (px,py,pz,cx,cy,cz)=>cb(px,py,pz,cx,cy,cz,half,half,half);}
 function makeSNeck(P){const nw=P.neck_w;
   return (px,py,pz,a,b)=>{const cx=(a[0]+b[0])/2,cy=(a[1]+b[1])/2,cz=(a[2]+b[2])/2;
     const hx=a[0]!==b[0]?Math.abs(a[0]-b[0])/2:nw/2, hy=a[1]!==b[1]?Math.abs(a[1]-b[1])/2:nw/2, hz=a[2]!==b[2]?Math.abs(a[2]-b[2])/2:nw/2;
@@ -165,23 +167,24 @@ function pieceTris(P,balls,vox){
   const m=2*vox;return meshSDF(sdf,X0-m,Y0-m,-m,X1+m,Y1+m,Z1+m,vox);
 }
 function templateTris(P,vox){
-  const sCube=makeSCube(P),sNeck=makeSNeck(P),half=P.half,pitch=P.pitch,vlayer=P.vlayer,ball_d=P.ball_d;
+  const sChamBox=makeSChamBox(P),sNeck=makeSNeck(P),half=P.half,pitch=P.pitch,vlayer=P.vlayer,ball_d=P.ball_d,cham=P.cham;
+  const Hpil=ball_d+vlayer,pcz=Hpil/2;
   const cen=(c,r,l)=>[c*pitch,-r*pitch,half+l*vlayer];
   const sdf=(x,y,z)=>{
     let d=1e9;const ci=Math.round(x/pitch),ri=Math.round(-y/pitch);
     for(let c=ci-1;c<=ci+1;c++)for(let r=ri-1;r<=ri+1;r++){
       if(c<0||c>=COLS||r<0||r>=ROWS)continue;
+      const Cx=c*pitch,Cy=-r*pitch;
+      d=Math.min(d,sChamBox(x,y,z,Cx,Cy,pcz,half,half,Hpil/2));     // solid pillar (both layers)
       for(let l=0;l<2;l++){const A=cen(c,r,l);
-        d=Math.min(d,sCube(x,y,z,A[0],A[1],A[2]));
-        if(c+1<COLS)d=Math.min(d,sNeck(x,y,z,A,cen(c+1,r,l)));
+        if(c+1<COLS)d=Math.min(d,sNeck(x,y,z,A,cen(c+1,r,l)));      // horizontal necks per layer
         if(r+1<ROWS)d=Math.min(d,sNeck(x,y,z,A,cen(c,r+1,l)));
-        if(l===0)d=Math.min(d,sNeck(x,y,z,A,cen(c,r,1)));
       }
     }
     return d;
   };
   const m=2*vox;
-  return meshSDF(sdf,-half-m,-(ROWS-1)*pitch-half-m,-m,(COLS-1)*pitch+half+m,half+m,ball_d+vlayer+m,vox);
+  return meshSDF(sdf,-half-m,-(ROWS-1)*pitch-half-m,-m,(COLS-1)*pitch+half+m,half+m,Hpil+m,vox);
 }
 
 // tris -> geometry / STL

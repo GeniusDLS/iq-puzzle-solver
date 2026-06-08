@@ -48,18 +48,18 @@ pieces = [
 function ballpos(b) = [ b[0]*pitch, -b[1]*pitch, ball_d/2 + b[2]*vlayer ];
 function adjacent(a,b) = (abs(a[0]-b[0]) + abs(a[1]-b[1]) + abs(a[2]-b[2])) == 1;
 
-// A chamfered cube ("truncated cube"): the cube clipped by three 45deg diamond
-// prisms, one per axis pair, so all 12 edges are bevelled.  Flat octagonal
-// bottom -> great bed adhesion.
-module chamfered_cube(side, ch){
-  a = side - ch; d = a*sqrt(2);
+// A chamfered box: clipped by three 45deg diamond prisms (one per axis pair) so
+// all 12 edges are bevelled.  Flat octagonal bottom -> great bed adhesion.
+module chamfered_box(sx, sy, sz, ch){
+  axy=(sx+sy)/2-ch; ayz=(sy+sz)/2-ch; axz=(sx+sz)/2-ch;
   intersection(){
-    cube([side, side, side], center=true);
-    rotate([0,0,45]) cube([d, d, side*3], center=true);
-    rotate([45,0,0]) cube([side*3, d, d], center=true);
-    rotate([0,45,0]) cube([d, side*3, d], center=true);
+    cube([sx, sy, sz], center=true);
+    rotate([0,0,45]) cube([axy*sqrt(2), axy*sqrt(2), sz*3], center=true);
+    rotate([45,0,0]) cube([sx*3, ayz*sqrt(2), ayz*sqrt(2)], center=true);
+    rotate([0,45,0]) cube([axz*sqrt(2), sy*3, axz*sqrt(2)], center=true);
   }
 }
+module chamfered_cube(side, ch){ chamfered_box(side, side, side, ch); }
 module unit_solid(){ chamfered_cube(ball_d, cham); }
 module neck(p,q){ hull(){ translate(p) cube(neck_w,center=true); translate(q) cube(neck_w,center=true); } }
 
@@ -71,9 +71,20 @@ module piece(balls){
   }
 }
 
-// The full 2 x 5 x 10 block of joined cubes (the "master" all pieces fill).
-function template_balls() = [for (c=[0:COLS-1]) for (r=[0:ROWS-1]) for (l=[0:1]) [c,r,l]];
-module template(){ piece(template_balls()); }
+// The 2 x 5 x 10 "master" all pieces fill.  Used to CUT a mould, so each cell is
+// a SOLID vertical pillar spanning both layers (continuous shaft); adjacent
+// pillars joined by thin horizontal necks at each layer (future wall slots).
+module template(){
+  Hpil = ball_d + vlayer;
+  union(){
+    for (c=[0:COLS-1]) for (r=[0:ROWS-1])
+      translate([c*pitch, -r*pitch, Hpil/2]) chamfered_box(ball_d, ball_d, Hpil, cham);
+    for (l=[0:1]) for (r=[0:ROWS-1]) for (c=[0:COLS-1]){
+      if (c<COLS-1) neck(ballpos([c,r,l]), ballpos([c+1,r,l]));
+      if (r<ROWS-1) neck(ballpos([c,r,l]), ballpos([c,r+1,l]));
+    }
+  }
+}
 
 module all_pieces(){
   sp = pitch;

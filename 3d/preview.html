@@ -24,7 +24,7 @@
 </head>
 <body>
   <div id="ui">
-    <h1>IQ Puzzler — 3D превʼю <span class="ver">3D v1.8 · 2026-06-08</span></h1>
+    <h1>IQ Puzzler — 3D превʼю <span class="ver">3D v1.9 · 2026-06-08</span></h1>
     <div class="row">
       <label for="part">Деталь:</label>
       <select id="part">
@@ -73,19 +73,20 @@ const PIECES = {   // hinge model: two flat faces sharing an edge, folded 90deg
 // piece-local coords -> three.js (x right, y up, z toward viewer)
 const pos=(b)=>new THREE.Vector3(b[0]*pitch, b[2]*vlayer, -b[1]*pitch);
 
-// chamfered-cube (truncated-cube) geometry: convex hull of 6 face squares + 8
-// corner points, so all 12 edges are bevelled.  Shared by every unit.
-const unitGeo=(()=>{
-  const half=ball_d/2, ach=ball_d-cham, e=ach-half, cc=ach/2, P=[];
-  for(const s of [-1,1]) for(const u of [-1,1]) for(const v of [-1,1]){
-    P.push(new THREE.Vector3(s*half, u*e, v*e));
-    P.push(new THREE.Vector3(u*e, s*half, v*e));
-    P.push(new THREE.Vector3(u*e, v*e, s*half));
+// chamfered-box geometry: convex hull of 6 face rectangles + 8 corner points,
+// so all 12 edges are bevelled.  chamBoxGeo(hx,hy,hz,ch); unit = chamfered cube.
+function chamBoxGeo(hx,hy,hz,ch){
+  const axy=hx+hy-ch, ayz=hy+hz-ch, axz=hx+hz-ch, S=(axy+ayz+axz)/2;
+  const ex=hx-ch, ey=hy-ch, ez=hz-ch, P=[];
+  for(const sx of [-1,1]) for(const sy of [-1,1]) for(const sz of [-1,1]){
+    P.push(new THREE.Vector3(sx*hx, sy*ey, sz*ez));
+    P.push(new THREE.Vector3(sx*ex, sy*hy, sz*ez));
+    P.push(new THREE.Vector3(sx*ex, sy*ey, sz*hz));
+    P.push(new THREE.Vector3(sx*(S-ayz), sy*(S-axz), sz*(S-axy)));
   }
-  for(const x of [-1,1]) for(const y of [-1,1]) for(const z of [-1,1])
-    P.push(new THREE.Vector3(x*cc, y*cc, z*cc));
   return new ConvexGeometry(P);
-})();
+}
+const unitGeo=chamBoxGeo(ball_d/2, ball_d/2, ball_d/2, cham);
 
 const renderer=new THREE.WebGLRenderer({antialias:true});
 renderer.setSize(innerWidth,innerHeight); renderer.setPixelRatio(devicePixelRatio);
@@ -118,7 +119,22 @@ function fit(obj){
 }
 function clear(){ scene.remove(group); group=new THREE.Group(); scene.add(group); }
 
-const TEMPLATE={c:'#7c89b0', b:(()=>{const a=[];for(let c=0;c<10;c++)for(let r=0;r<5;r++)for(let l=0;l<2;l++)a.push([c,r,l]);return a;})()};
+// template: solid vertical pillars (both layers) + thin horizontal necks per layer
+function buildTemplate(){
+  const g=new THREE.Group();
+  const mat=new THREE.MeshStandardMaterial({color:'#7c89b0',roughness:.55,metalness:.08});
+  const Hpil=ball_d+vlayer, pillar=chamBoxGeo(ball_d/2,ball_d/2,Hpil/2,cham);
+  for(let c=0;c<10;c++)for(let r=0;r<5;r++){ const m=new THREE.Mesh(pillar,mat);
+    m.position.set(c*pitch, vlayer/2, -r*pitch); g.add(m); }
+  const bar=(a,b)=>{ const p0=pos(a),p1=pos(b);
+    const sx=Math.abs(p1.x-p0.x)||neck_w, sy=Math.abs(p1.y-p0.y)||neck_w, sz=Math.abs(p1.z-p0.z)||neck_w;
+    const m=new THREE.Mesh(new THREE.BoxGeometry(sx,sy,sz),mat); m.position.copy(p0).add(p1).multiplyScalar(.5); g.add(m); };
+  for(let l=0;l<2;l++)for(let r=0;r<5;r++)for(let c=0;c<10;c++){
+    if(c<9) bar([c,r,l],[c+1,r,l]);
+    if(r<4) bar([c,r,l],[c,r+1,l]);
+  }
+  return g;
+}
 
 function show(part){
   clear();
@@ -130,7 +146,7 @@ function show(part){
     ids.forEach((k,i)=>{ const col=i%5,row=Math.floor(i/5);
       group.add(buildPiece(PIECES[k], col*(5*pitch+pitch), -row*(3*pitch+2*pitch))); });
   } else if(part==='template'){
-    group.add(buildPiece(TEMPLATE));
+    group.add(buildTemplate());
   } else {
     group.add(buildPiece(PIECES[part]));
   }
