@@ -15,10 +15,10 @@ part = "demo";           // ["demo","board","all","A","B","C","D","E","F","G","H
 ball_d = 10;             // cube side (was the ball diameter: 1 cm)
 pitch  = 10;             // centre-to-centre spacing — == ball_d (cubes touch & fuse)
 vlayer = 10;             // vertical spacing between stacked layers
-cham   = 2.0;            // chamfer cut on every cube edge (truncated-cube look; flat bottom)
+cham   = 3.0;            // chamfer cut on every cube edge (truncated-cube look; flat bottom)
 
 /* [Board — tray hugging the 5x10 x 2-layer footprint] */
-gap    = 0.4;   // clearance around the pieces (free passage)
+gap    = 0.3;   // clearance around the pieces (free passage)
 wall   = 3;     // side wall thickness
 floor  = 3;     // floor thickness under the bottom layer
 push_d = 5;     // push-out hole in the floor under each cell (0 = solid floor)

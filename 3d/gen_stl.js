@@ -8,10 +8,10 @@ const path = require('path');
 
 // ---- params (keep in sync with iq_puzzle.scad) ----  cube side = 10 mm (1 cm)
 const ball_d=10, pitch=10, vlayer=10;       // cube side, grid spacing, layer height
-const cham=2.0;                              // chamfer cut on every cube edge (mm)
+const cham=3.0;                              // chamfer cut on every cube edge (mm)
 // board = a tray hugging the full 5x10 x 2-layer footprint (gap clearance);
 // the upper layer protrudes half a cube for easy insert/remove.
-const gap=0.4, wall=3, floor=3, push_d=5;   // push_d: bottom push-out hole under each cell
+const gap=0.3, wall=3, floor=3, push_d=5;   // push_d: bottom push-out hole under each cell
 const VOX=0.7;    // voxel size for the board mesh
 const VOXP=0.5;   // voxel size for the pieces (finer -> crisper chamfers)
 const ROWS=5, COLS=10;
