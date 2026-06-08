@@ -24,7 +24,7 @@
 </head>
 <body>
   <div id="ui">
-    <h1>IQ Puzzler — 3D превʼю <span class="ver">3D v1.2 · 2026-06-08</span></h1>
+    <h1>IQ Puzzler — 3D превʼю <span class="ver">3D v1.3 · 2026-06-08</span></h1>
     <div class="row">
       <label for="part">Деталь:</label>
       <select id="part">
@@ -53,8 +53,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 
-const ball_d=10, pitch=10, vlayer=10, neck_ratio=0.45;
+const ball_d=10, pitch=10, vlayer=10, cham=2.0;
 const PIECES = {   // hinge model: two flat faces sharing an edge, folded 90deg
   A:{c:'#f5a623',b:[[0,0,0],[0,0,1],[1,0,0],[1,0,1],[2,0,0],[3,0,0],[3,1,0]]},
   B:{c:'#ff6d00',b:[[0,0,0],[1,0,0],[1,0,1],[1,1,0],[2,0,0],[3,0,0],[3,0,1]]},
@@ -67,9 +68,22 @@ const PIECES = {   // hinge model: two flat faces sharing an edge, folded 90deg
   I:{c:'#a4d233',b:[[0,0,0],[0,0,1],[0,1,0],[1,0,0],[2,0,0],[2,1,0]]},
   J:{c:'#2ecc40',b:[[0,0,0],[0,1,0],[1,0,0],[1,0,1],[1,1,0],[2,0,0]]},
 };
-const adj=(a,b)=>Math.abs(a[0]-b[0])+Math.abs(a[1]-b[1])+Math.abs(a[2]-b[2])===1;
 // piece-local coords -> three.js (x right, y up, z toward viewer)
 const pos=(b)=>new THREE.Vector3(b[0]*pitch, b[2]*vlayer, -b[1]*pitch);
+
+// chamfered-cube (truncated-cube) geometry: convex hull of 6 face squares + 8
+// corner points, so all 12 edges are bevelled.  Shared by every unit.
+const unitGeo=(()=>{
+  const half=ball_d/2, ach=ball_d-cham, e=ach-half, cc=ach/2, P=[];
+  for(const s of [-1,1]) for(const u of [-1,1]) for(const v of [-1,1]){
+    P.push(new THREE.Vector3(s*half, u*e, v*e));
+    P.push(new THREE.Vector3(u*e, s*half, v*e));
+    P.push(new THREE.Vector3(u*e, v*e, s*half));
+  }
+  for(const x of [-1,1]) for(const y of [-1,1]) for(const z of [-1,1])
+    P.push(new THREE.Vector3(x*cc, y*cc, z*cc));
+  return new ConvexGeometry(P);
+})();
 
 const renderer=new THREE.WebGLRenderer({antialias:true});
 renderer.setSize(innerWidth,innerHeight); renderer.setPixelRatio(devicePixelRatio);
@@ -84,17 +98,8 @@ let group=new THREE.Group(); scene.add(group);
 
 function buildPiece(def,ox=0,oz=0){
   const g=new THREE.Group();
-  const mat=new THREE.MeshStandardMaterial({color:def.c,roughness:.45,metalness:.1});
-  const sph=new THREE.SphereGeometry(ball_d/2,28,20);
-  for(const b of def.b){ const m=new THREE.Mesh(sph,mat); m.position.copy(pos(b)).add(new THREE.Vector3(ox,0,oz)); g.add(m); }
-  const nr=ball_d*neck_ratio/2;
-  for(let i=0;i<def.b.length;i++)for(let j=i+1;j<def.b.length;j++) if(adj(def.b[i],def.b[j])){
-    const p0=pos(def.b[i]),p1=pos(def.b[j]); const mid=p0.clone().add(p1).multiplyScalar(.5).add(new THREE.Vector3(ox,0,oz));
-    const len=p0.distanceTo(p1); const cyl=new THREE.Mesh(new THREE.CylinderGeometry(nr,nr,len,18),mat);
-    cyl.position.copy(mid);
-    cyl.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), p1.clone().sub(p0).normalize());
-    g.add(cyl);
-  }
+  const mat=new THREE.MeshStandardMaterial({color:def.c,roughness:.5,metalness:.1});
+  for(const b of def.b){ const m=new THREE.Mesh(unitGeo,mat); m.position.copy(pos(b)).add(new THREE.Vector3(ox,0,oz)); g.add(m); }
   return g;
 }
 function fit(obj){

@@ -1,6 +1,6 @@
 // =====================================================================
 //  IQ Puzzler — 3D-printable model (parametric)
-//  Board (5 x 10 sockets) + pieces (fused balls).
+//  Board (5 x 10 sockets) + pieces built from chamfered cubes.
 //  Open in OpenSCAD (free): set `part` below, press F6, then Export as STL.
 // =====================================================================
 
@@ -11,31 +11,28 @@
 // "A".."J" -> a single piece by id
 part = "demo";           // ["demo","board","all","A","B","C","D","E","F","G","H","I","J"]
 
-/* [Main dimensions, mm]  — ball diameter measured at 10 mm (1 cm) */
-ball_d     = 10;         // diameter of the balls (measured: 1 cm)
-pitch      = 10;         // centre-to-centre spacing — == ball_d (balls touch)
-neck_ratio = 0.45;       // neck thickness between balls (x ball_d) — keeps prints solid
-vlayer     = 10;         // vertical spacing between stacked layers (== ball_d for a cubic stack)
+/* [Main dimensions, mm] — unit cube measured at 10 mm (1 cm) */
+ball_d = 10;             // cube side (was the ball diameter: 1 cm)
+pitch  = 10;             // centre-to-centre spacing — == ball_d (cubes touch & fuse)
+vlayer = 10;             // vertical spacing between stacked layers
+cham   = 2.0;            // chamfer cut on every cube edge (truncated-cube look; flat bottom)
 
-/* [Board — mould enclosing the 5x10 x 2-layer ball template] */
-gap    = 0.4;   // clearance around the template (free passage)
+/* [Board — tray hugging the 5x10 x 2-layer footprint] */
+gap    = 0.4;   // clearance around the pieces (free passage)
 wall   = 3;     // side wall thickness
-floor  = 3;     // floor thickness under the bottom ball layer
-push_d = 5;     // push-out hole in the floor under each ball (0 = solid floor)
+floor  = 3;     // floor thickness under the bottom layer
+push_d = 5;     // push-out hole in the floor under each cell (0 = solid floor)
 ROWS = 5;
 COLS = 10;
-
-/* [Printing helpers] */
-bottom_flat = 1.0;       // shave this much off the very bottom of pieces for bed adhesion (0 = off)
 
 /* [Quality] */
 $fn = 48;
 
 // ---------------------------------------------------------------------
-//  Piece data.  Each ball = [col, row, layer]  (layer 0 = bottom).
+//  Piece data.  Each cube = [col, row, layer]  (layer 0 = bottom).
 //  Real 3-D shapes: each piece is two flat faces sharing a common edge (hinge)
-//  folded at 90deg — face 1 lies flat (z=0), face 2 stands up (y=0). The balls
-//  that show in face 2 sit ON TOP. Both faces are preserved.
+//  folded at 90deg — face 1 lies flat (z=0), face 2 stands up. The cubes that
+//  show in face 2 sit ON TOP. Both faces are preserved.
 // ---------------------------------------------------------------------
 pieces = [
   ["A", [[0,0,0],[0,0,1],[1,0,0],[1,0,1],[2,0,0],[3,0,0],[3,1,0]]],
@@ -52,69 +49,47 @@ pieces = [
 
 // ---- helpers ----
 function ballpos(b) = [ b[0]*pitch, -b[1]*pitch, ball_d/2 + b[2]*vlayer ];
-function adjacent(a,b) = (abs(a[0]-b[0]) + abs(a[1]-b[1]) + abs(a[2]-b[2])) == 1;
 
-module piece_solid(balls){
-  union(){
-    for (b = balls) translate(ballpos(b)) sphere(d = ball_d);
-    // fuse neighbouring balls with a capsule (hull of two smaller spheres)
-    for (i = [0:len(balls)-1])
-      for (j = [i+1:len(balls)-1])
-        if (adjacent(balls[i], balls[j]))
-          hull(){
-            translate(ballpos(balls[i])) sphere(d = ball_d*neck_ratio);
-            translate(ballpos(balls[j])) sphere(d = ball_d*neck_ratio);
-          }
+// A chamfered cube ("truncated cube"): the cube clipped by three 45deg diamond
+// prisms, one per axis pair, so all 12 edges are bevelled.  A flat octagonal
+// bottom remains (great bed adhesion); touching cubes fuse into one solid.
+module unit_solid(){
+  a = ball_d - cham;          // chamfer plane: |x|+|y| <= a  (etc.)
+  d = a*sqrt(2);
+  intersection(){
+    cube([ball_d, ball_d, ball_d], center=true);
+    rotate([0,0,45]) cube([d, d, ball_d*3], center=true);   // bevel the 4 z-edges
+    rotate([45,0,0]) cube([ball_d*3, d, d], center=true);   // bevel the 4 x-edges
+    rotate([0,45,0]) cube([d, ball_d*3, d], center=true);   // bevel the 4 y-edges
   }
 }
 
 module piece(balls){
-  if (bottom_flat > 0)
-    difference(){
-      piece_solid(balls);
-      translate([-1000,-1000,-1000]) cube([2000,2000,1000 + bottom_flat]); // cut below z = bottom_flat
-    }
-  else
-    piece_solid(balls);
+  union(){ for (b = balls) translate(ballpos(b)) unit_solid(); }
 }
 
-function z_bottom() = floor + ball_d/2 + gap;   // bottom-layer ball centre
-function z_top()    = z_bottom() + vlayer;      // top-layer ball centre
-function board_H()  = z_top();                  // board top = top centre (upper balls protrude)
-
-// Cavity insertable from the top: per-column wells (rounded bottom + cylinder up
-// to the open top) joined by full-height slots so the piece's necks slide down.
-module mould_cavity(){
-  cr = ball_d/2 + gap; nr = ball_d*neck_ratio/2 + gap;
-  H  = board_H(); zb = z_bottom();
-  for (r=[0:ROWS-1]) for (c=[0:COLS-1]){
-    translate([c*pitch, -r*pitch, zb]) sphere(r=cr);                         // dimple bottom
-    translate([c*pitch, -r*pitch, zb]) cylinder(h=H-zb+1, r=cr, $fn=40);     // well to the top
-  }
-  for (r=[0:ROWS-1]) for (c=[0:COLS-2])                                      // x neck slots
-    translate([c*pitch, -r*pitch-nr, zb]) cube([pitch, 2*nr, H-zb+1]);
-  for (r=[0:ROWS-2]) for (c=[0:COLS-1])                                      // y neck slots
-    translate([c*pitch-nr, -(r+1)*pitch, zb]) cube([2*nr, pitch, H-zb+1]);
-}
+function z_bottom() = floor + ball_d/2;          // bottom-layer cube centre (rests on floor)
+function board_H()  = z_bottom() + vlayer;       // board top = upper-layer centre (protrudes half)
 
 module board(){
-  H=board_H(); edge=ball_d/2+gap+wall;
-  bx=(COLS-1)*pitch+2*edge; by=(ROWS-1)*pitch+2*edge;
+  H = board_H(); edge = ball_d/2 + gap + wall; ph = ball_d/2 + gap;
+  bx = (COLS-1)*pitch + 2*edge; by = (ROWS-1)*pitch + 2*edge;
   difference(){
     translate([-edge, -(ROWS-1)*pitch-edge, 0]) cube([bx, by, H]);
-    mould_cavity();         // hollow it out (wells + full-height neck slots)
-    if (push_d > 0)         // push-out holes in the floor under each ball
+    // open pocket hugging the footprint (+gap), insertable straight from the top
+    translate([-ph, -(ROWS-1)*pitch-ph, floor])
+      cube([(COLS-1)*pitch + 2*ph, (ROWS-1)*pitch + 2*ph, H - floor + 1]);
+    if (push_d > 0)         // push-out holes in the floor under each cell
       for (r=[0:ROWS-1]) for (c=[0:COLS-1])
-        translate([c*pitch, -r*pitch, -1]) cylinder(h=z_bottom()+1, d=push_d, $fn=24);
+        translate([c*pitch, -r*pitch, -1]) cylinder(h=floor+2, d=push_d, $fn=24);
   }
 }
 
-// piece bounding width in columns (for the "all" layout)
+// piece bounding size (for the "all" layout)
 function pcols(balls) = max([for (b = balls) b[0]]) + 1;
-function prows(balls) = max([for (b = balls) b[1]]) + 1;
 
 module all_pieces(){
-  sp = pitch;                  // space between pieces
+  sp = pitch;
   for (i = [0:len(pieces)-1]) {
     col = i % 5;
     row = floor(i / 5);
@@ -123,23 +98,15 @@ module all_pieces(){
   }
 }
 
-// absolute position of ball b of a piece dropped into the mould at grid (oc,or_)
+// Place a piece inside the tray in its natural grid orientation.
 function mpos(b, oc, or_) = [ (oc+b[0])*pitch, -(or_+b[1])*pitch, z_bottom()+b[2]*vlayer ];
-
-// Place a piece inside the mould in its natural grid orientation.
 module place_in_mould(balls, oc, or_, col){
-  color(col) union(){
-    for (b = balls) translate(mpos(b,oc,or_)) sphere(d = ball_d);
-    for (i=[0:len(balls)-1]) for (j=[i+1:len(balls)-1])
-      if (adjacent(balls[i],balls[j]))
-        hull(){ translate(mpos(balls[i],oc,or_)) sphere(d=ball_d*neck_ratio);
-                translate(mpos(balls[j],oc,or_)) sphere(d=ball_d*neck_ratio); }
-  }
+  color(col) union(){ for (b = balls) translate(mpos(b,oc,or_)) unit_solid(); }
 }
 
 module demo(){
   %board();                                      // ghost so the piece shows through
-  place_in_mould(pieces[0][1], 3, 1, "#f5a623"); // piece A dropped into the mould
+  place_in_mould(pieces[0][1], 3, 1, "#f5a623"); // piece A dropped into the tray
 }
 
 module render_part(){
