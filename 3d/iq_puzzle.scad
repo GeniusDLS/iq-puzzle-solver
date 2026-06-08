@@ -1,29 +1,24 @@
 // =====================================================================
 //  IQ Puzzler — 3D-printable model (parametric)
-//  Board = full waffle (5 x 10 cells) + pieces = chamfered cubes + necks.
+//  Template (2 x 5 x 10 block of joined cubes) + pieces = chamfered cubes + necks.
 //  Open in OpenSCAD (free): set `part` below, press F6, then Export as STL.
 // =====================================================================
 
 /* [What to render] */
-// "demo"   -> board + piece A resting in it (to check the fit)
-// "board"  -> the base plate only
-// "all"    -> every piece laid out in a grid (for printing them together)
-// "A".."J" -> a single piece by id
-part = "demo";           // ["demo","board","all","A","B","C","D","E","F","G","H","I","J"]
+// "demo"     -> template (ghost) + piece A highlighted in place
+// "template" -> the full 2x5x10 block of joined cubes
+// "all"      -> every piece laid out in a grid (for printing them together)
+// "A".."J"   -> a single piece by id
+part = "demo";           // ["demo","template","all","A","B","C","D","E","F","G","H","I","J"]
 
 /* [Main dimensions, mm] — unit cube measured at 10 mm (1 cm) */
 ball_d  = 10;            // cube side
 cham    = 2.0;           // chamfer cut on every cube edge (truncated-cube look; flat bottom)
-wall_in = 1.5;           // internal partition thickness between cells (the waffle walls)
-gap     = 0.3;           // clearance around the pieces (free passage)
-neck_w  = 4;             // neck cross-section joining a piece's cubes
+wall_in = 1.5;           // nominal partition between cells (sets the spacing)
+gap     = 0.3;           // clearance allowance
+neck_w  = 4;             // neck cross-section joining adjacent cubes
 pitch   = ball_d + 2*gap + wall_in;   // 12.1 — spacing (uniform in all directions)
 vlayer  = pitch;         // vertical spacing == horizontal (cubes spaced everywhere)
-
-/* [Board outer] */
-wall   = 3;     // outer wall thickness
-floor  = 3;     // floor thickness under the bottom layer
-push_d = 5;     // push-out hole in the floor under each cell (0 = solid floor)
 ROWS = 5;
 COLS = 10;
 
@@ -76,27 +71,9 @@ module piece(balls){
   }
 }
 
-function z_bottom() = floor + ball_d/2;          // bottom-layer cube centre (rests on floor)
-function board_H()  = z_bottom() + vlayer;       // board top = upper-layer centre (protrudes half)
-
-module board(){
-  H = board_H(); edge = ball_d/2 + gap + wall; wh = ball_d/2 + gap; sh = neck_w/2 + gap;
-  bx = (COLS-1)*pitch + 2*edge; by = (ROWS-1)*pitch + 2*edge;
-  difference(){
-    translate([-edge, -(ROWS-1)*pitch-edge, 0]) cube([bx, by, H]);
-    for (r=[0:ROWS-1]) for (c=[0:COLS-1]){                                  // wells: bevelled seat + shaft
-      translate([c*pitch, -r*pitch, z_bottom()]) chamfered_cube(ball_d+2*gap, cham);  // seat = cube contour
-      translate([c*pitch-wh, -r*pitch-wh, floor+cham]) cube([2*wh, 2*wh, H-floor-cham+1]); // square shaft above
-    }
-    for (r=[0:ROWS-1]) for (c=[0:COLS-2])                                   // x neck slots
-      translate([c*pitch+pitch/2-2, -r*pitch-sh, floor]) cube([4, 2*sh, H-floor+1]);
-    for (r=[0:ROWS-2]) for (c=[0:COLS-1])                                   // y neck slots
-      translate([c*pitch-sh, -r*pitch-pitch/2-2, floor]) cube([2*sh, 4, H-floor+1]);
-    if (push_d > 0)                                                         // push-out holes
-      for (r=[0:ROWS-1]) for (c=[0:COLS-1])
-        translate([c*pitch, -r*pitch, -1]) cylinder(h=floor+2, d=push_d, $fn=24);
-  }
-}
+// The full 2 x 5 x 10 block of joined cubes (the "master" all pieces fill).
+function template_balls() = [for (c=[0:COLS-1]) for (r=[0:ROWS-1]) for (l=[0:1]) [c,r,l]];
+module template(){ piece(template_balls()); }
 
 module all_pieces(){
   sp = pitch;
@@ -108,23 +85,13 @@ module all_pieces(){
   }
 }
 
-// Place a piece inside the waffle in its natural grid orientation.
-function mpos(b, oc, or_) = [ (oc+b[0])*pitch, -(or_+b[1])*pitch, z_bottom()+b[2]*vlayer ];
-module place_in_mould(balls, oc, or_, col){
-  color(col) union(){
-    for (b = balls) translate(mpos(b,oc,or_)) unit_solid();
-    for (i=[0:len(balls)-1]) for (j=[i+1:len(balls)-1])
-      if (adjacent(balls[i],balls[j])) neck(mpos(balls[i],oc,or_), mpos(balls[j],oc,or_));
-  }
-}
-
 module demo(){
-  %board();                                      // ghost so the piece shows through
-  place_in_mould(pieces[0][1], 3, 1, "#f5a623"); // piece A dropped into the waffle
+  %template();                                   // ghost so the piece shows through
+  color("#f5a623") piece(pieces[0][1]);          // piece A highlighted in its place
 }
 
 module render_part(){
-  if (part == "board")      board();
+  if (part == "template")   template();
   else if (part == "all")   all_pieces();
   else if (part == "demo")  demo();
   else {

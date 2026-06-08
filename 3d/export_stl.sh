@@ -4,7 +4,7 @@ set -e
 SCAD="iq_puzzle.scad"
 OUT="stl"
 mkdir -p "$OUT"
-echo "board ..."; openscad -o "$OUT/board.stl" -D 'part="board"' "$SCAD"
+echo "template ..."; openscad -o "$OUT/template.stl" -D 'part="template"' "$SCAD"
 for p in A B C D E F G H I J; do
   echo "piece $p ..."; openscad -o "$OUT/piece_$p.stl" -D "part=\"$p\"" "$SCAD"
 done

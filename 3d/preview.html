@@ -24,12 +24,12 @@
 </head>
 <body>
   <div id="ui">
-    <h1>IQ Puzzler — 3D превʼю <span class="ver">3D v1.7 · 2026-06-08</span></h1>
+    <h1>IQ Puzzler — 3D превʼю <span class="ver">3D v1.8 · 2026-06-08</span></h1>
     <div class="row">
       <label for="part">Деталь:</label>
       <select id="part">
         <option value="all">Усі фігури</option>
-        <option value="board">Дошка (STL)</option>
+        <option value="template">Шаблон 2×5×10</option>
         <option value="A">A · Жовта</option><option value="B">B · Помаранчева</option>
         <option value="C">C · Рожева</option><option value="D">D · Червона</option>
         <option value="E">E · Голуба</option><option value="F">F · Бірюзова</option>
@@ -39,8 +39,7 @@
       <button id="spin">⟳ авто</button>
     </div>
     <div id="dl"></div>
-    <div class="muted">Тягніть — обертати, колесо — масштаб. Превʼю фігур будується з даних;
-      «Дошка» вантажить <code>stl/board.stl</code>.
+    <div class="muted">Тягніть — обертати, колесо — масштаб. Усе будується з даних.
       <a href="params.html">⚙ Параметри наживо</a> · <a href="../index.html">← Solver</a></div>
   </div>
 
@@ -53,7 +52,6 @@
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 
 const ball_d=10, cham=2.0, neck_w=4;
@@ -120,22 +118,19 @@ function fit(obj){
 }
 function clear(){ scene.remove(group); group=new THREE.Group(); scene.add(group); }
 
+const TEMPLATE={c:'#7c89b0', b:(()=>{const a=[];for(let c=0;c<10;c++)for(let r=0;r<5;r++)for(let l=0;l<2;l++)a.push([c,r,l]);return a;})()};
+
 function show(part){
   clear();
   document.getElementById('dl').innerHTML = part==='all'
-    ? Object.keys(PIECES).map(k=>`<a href="stl/piece_${k}.stl" download>${k}</a>`).join(' ')+` · <a href="stl/board.stl" download>board</a>`
-    : `<a href="stl/${part==='board'?'board':'piece_'+part}.stl" download>⬇ ${part}.stl</a>`;
-  if(part==='board'){
-    new STLLoader().load('stl/board.stl', geo=>{ geo.computeVertexNormals();
-      const m=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:'#5b6685',roughness:.7,side:THREE.DoubleSide}));
-      m.rotation.x=-Math.PI/2; group.add(m); fit(group);
-    }, undefined, ()=>{ document.getElementById('dl').innerHTML+=' <span style="color:#ff5d6c">(не вдалось завантажити STL — відкрийте через сайт)</span>'; });
-    return;
-  }
+    ? Object.keys(PIECES).map(k=>`<a href="stl/piece_${k}.stl" download>${k}</a>`).join(' ')+` · <a href="stl/template.stl" download>template</a>`
+    : `<a href="stl/${part==='template'?'template':'piece_'+part}.stl" download>⬇ ${part}.stl</a>`;
   if(part==='all'){
     const ids=Object.keys(PIECES);
     ids.forEach((k,i)=>{ const col=i%5,row=Math.floor(i/5);
       group.add(buildPiece(PIECES[k], col*(5*pitch+pitch), -row*(3*pitch+2*pitch))); });
+  } else if(part==='template'){
+    group.add(buildPiece(TEMPLATE));
   } else {
     group.add(buildPiece(PIECES[part]));
   }

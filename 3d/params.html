@@ -30,14 +30,14 @@
 </head>
 <body>
   <div id="ui">
-    <h1>3D параметри наживо <span class="ver">params v1.1</span></h1>
+    <h1>3D параметри наживо <span class="ver">params v1.2</span></h1>
     <div class="info">Крутіть повзунки — модель і STL перераховуються в браузері.
       <a href="preview.html">прев'ю</a> · <a href="../index.html">solver</a></div>
 
     <div class="row" style="margin-top:9px">
       <label>Деталь</label>
       <select id="part" style="flex:1">
-        <option value="board">Дошка</option>
+        <option value="template">Шаблон 2×5×10</option>
         <option value="all">Усі фігури</option>
         <option value="A">A · Жовта</option><option value="B">B · Помаранчева</option>
         <option value="C">C · Рожева</option><option value="D">D · Червона</option>
@@ -55,12 +55,6 @@
       <div class="row"><label>Шийка</label><input id="neck_w" type="range" min="2" max="6" step="0.5" value="4"><span class="val" id="neck_w_v"></span></div>
       <div class="row"><label>Верт. крок</label><input id="vlayer" type="range" min="10" max="16" step="0.1" value="12.1"><span class="val" id="vlayer_v"></span></div>
       <div class="row"><label style="flex:1"><input id="uniform" type="checkbox" checked> верт. крок = крок сітки</label></div>
-    </div>
-
-    <div class="grp"><div class="t">Дошка</div>
-      <div class="row"><label>Дно</label><input id="floor" type="range" min="1" max="5" step="0.5" value="3"><span class="val" id="floor_v"></span></div>
-      <div class="row"><label>Зовн. стінка</label><input id="wall" type="range" min="1.5" max="5" step="0.5" value="3"><span class="val" id="wall_v"></span></div>
-      <div class="row"><label>Виштовх. ⌀</label><input id="push_d" type="range" min="0" max="7" step="0.5" value="5"><span class="val" id="push_d_v"></span></div>
     </div>
 
     <div class="grp"><div class="t">Якість мешу</div>
@@ -170,26 +164,24 @@ function pieceTris(P,balls,vox){
   for(const c of C){X0=Math.min(X0,c[0]-half);X1=Math.max(X1,c[0]+half);Y0=Math.min(Y0,c[1]-half);Y1=Math.max(Y1,c[1]+half);Z1=Math.max(Z1,c[2]+half);}
   const m=2*vox;return meshSDF(sdf,X0-m,Y0-m,-m,X1+m,Y1+m,Z1+m,vox);
 }
-function boardTris(P,vox){
-  const sCube=makeSCube(P),half=P.half,cham=P.cham,z_b=P.floor+half,H=z_b+P.vlayer;
-  const edge=half+P.gap+P.wall,wh=half+P.gap,sh=P.neck_w/2+P.gap,pr=P.push_d/2;
-  const bx0=-edge,bx1=(COLS-1)*P.pitch+edge,by0=-(ROWS-1)*P.pitch-edge,by1=edge;
-  const bcx=(bx0+bx1)/2,bcy=(by0+by1)/2,hbx=(bx1-bx0)/2,hby=(by1-by0)/2;
+function templateTris(P,vox){
+  const sCube=makeSCube(P),sNeck=makeSNeck(P),half=P.half,pitch=P.pitch,vlayer=P.vlayer,ball_d=P.ball_d;
+  const cen=(c,r,l)=>[c*pitch,-r*pitch,half+l*vlayer];
   const sdf=(x,y,z)=>{
-    const block=sBox(x,y,z,bcx,bcy,H/2,hbx,hby,H/2);
-    let cav=1e9;const ci=Math.round(x/P.pitch),ri=Math.round(-y/P.pitch);
-    for(let dc=-1;dc<=1;dc++)for(let dr=-1;dr<=1;dr++){const c=ci+dc,r=ri+dr;if(c<0||c>=COLS||r<0||r>=ROWS)continue;
-      const Cx=c*P.pitch,Cy=-r*P.pitch;
-      const seat=sCube(x,y,z,Cx,Cy,z_b)-P.gap;                                            // bevelled seat = cube contour
-      const shaft=sBox(x,y,z,Cx,Cy,(P.floor+cham+H+5)/2,wh,wh,(H+5-(P.floor+cham))/2);    // square shaft above
-      cav=Math.min(cav,Math.min(seat,shaft));
-      if(P.push_d>0)cav=Math.min(cav,sCyl(x,y,z,Cx,Cy,-5,P.floor+1,pr));
-      if(c<COLS-1)cav=Math.min(cav,sBox(x,y,z,Cx+P.pitch/2,Cy,(P.floor+H)/2,2,sh,(H-P.floor)/2));
-      if(r<ROWS-1)cav=Math.min(cav,sBox(x,y,z,Cx,Cy-P.pitch/2,(P.floor+H)/2,sh,2,(H-P.floor)/2));
+    let d=1e9;const ci=Math.round(x/pitch),ri=Math.round(-y/pitch);
+    for(let c=ci-1;c<=ci+1;c++)for(let r=ri-1;r<=ri+1;r++){
+      if(c<0||c>=COLS||r<0||r>=ROWS)continue;
+      for(let l=0;l<2;l++){const A=cen(c,r,l);
+        d=Math.min(d,sCube(x,y,z,A[0],A[1],A[2]));
+        if(c+1<COLS)d=Math.min(d,sNeck(x,y,z,A,cen(c+1,r,l)));
+        if(r+1<ROWS)d=Math.min(d,sNeck(x,y,z,A,cen(c,r+1,l)));
+        if(l===0)d=Math.min(d,sNeck(x,y,z,A,cen(c,r,1)));
+      }
     }
-    return Math.max(block,-cav);
+    return d;
   };
-  const m=2*vox;return meshSDF(sdf,bx0-m,by0-m,-m,bx1+m,by1+m,H+m,vox);
+  const m=2*vox;
+  return meshSDF(sdf,-half-m,-(ROWS-1)*pitch-half-m,-m,(COLS-1)*pitch+half+m,half+m,ball_d+vlayer+m,vox);
 }
 
 // tris -> geometry / STL
@@ -233,13 +225,12 @@ function addMesh(tris,color){const g=trisToGeom(tris);
   const m=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color,roughness:.55,metalness:.08,flatShading:true,side:THREE.DoubleSide}));
   m.rotation.x=-Math.PI/2;group.add(m);}
 
-const ids=['ball_d','cham','wall_in','gap','neck_w','vlayer','floor','wall','push_d','detail'];
+const ids=['ball_d','cham','wall_in','gap','neck_w','vlayer','detail'];
 function readParams(){
   const g=id=>parseFloat(document.getElementById(id).value);
   ids.forEach(id=>{const el=document.getElementById(id+'_v');if(el)el.textContent=g(id);});
   const P={ball_d:g('ball_d'),cham:g('cham'),wall_in:g('wall_in'),gap:g('gap'),neck_w:g('neck_w'),
-    uniform:document.getElementById('uniform').checked,vlayerRaw:g('vlayer'),
-    floor:g('floor'),wall:g('wall'),push_d:g('push_d')};
+    uniform:document.getElementById('uniform').checked,vlayerRaw:g('vlayer')};
   document.getElementById('vlayer').disabled=P.uniform;
   return derive(P);
 }
@@ -253,17 +244,17 @@ function rebuild(){
       const t=offsetTris(pieceTris(P,PIECES[k].b,vox),col*(5*P.pitch+sp),-row*(3*P.pitch+sp));
       addMesh(t,PIECES[k].c);all=all.concat(t);});
     curTris=all;curName='all_pieces_custom';}
-  else if(part==='board'){curTris=boardTris(P,vox);curName='board_custom';addMesh(curTris,'#7c89b0');}
+  else if(part==='template'){curTris=templateTris(P,vox);curName='template_custom';addMesh(curTris,'#7c89b0');}
   else{curTris=pieceTris(P,PIECES[part].b,vox);curName='piece_'+part+'_custom';addMesh(curTris,PIECES[part].c);}
   fit(group);
   const ms=Math.round(performance.now()-t0);
   const tcount=curTris.length;
-  const H=(P.floor+P.ball_d/2+P.vlayer).toFixed(1);
-  const bw=((COLS-1)*P.pitch+2*(P.ball_d/2+P.gap+P.wall)).toFixed(1);
-  const bh=((ROWS-1)*P.pitch+2*(P.ball_d/2+P.gap+P.wall)).toFixed(1);
+  const tw=((COLS-1)*P.pitch+P.ball_d).toFixed(1);
+  const th=((ROWS-1)*P.pitch+P.ball_d).toFixed(1);
+  const tz=(P.ball_d+P.vlayer).toFixed(1);
   document.getElementById('status').textContent=`${tcount.toLocaleString()} трикутників · ${ms} мс`;
   document.getElementById('dims').innerHTML=
-    `крок сітки <b>${P.pitch.toFixed(1)}</b> мм · верт. крок <b>${P.vlayer.toFixed(1)}</b> · дошка <b>${bw}×${bh}×${H}</b> мм`;
+    `крок сітки <b>${P.pitch.toFixed(1)}</b> мм · верт. крок <b>${P.vlayer.toFixed(1)}</b> · шаблон <b>${tw}×${th}×${tz}</b> мм`;
 }
 
 let timer=null;
@@ -277,7 +268,7 @@ document.getElementById('dl').addEventListener('click',()=>{
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=curName+'.stl';a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),2000);
 });
-const defaults={ball_d:10,cham:2,wall_in:1.5,gap:0.3,neck_w:4,vlayer:12.1,floor:3,wall:3,push_d:5,detail:0.7};
+const defaults={ball_d:10,cham:2,wall_in:1.5,gap:0.3,neck_w:4,vlayer:12.1,detail:0.7};
 document.getElementById('reset').addEventListener('click',()=>{
   for(const k in defaults)document.getElementById(k).value=defaults[k];
   document.getElementById('uniform').checked=true;firstFit=true;schedule();

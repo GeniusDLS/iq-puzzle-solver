@@ -1,8 +1,8 @@
-// Generate binary STL files for the board and all pieces — no deps, no OpenSCAD.
-// Units are chamfered cubes (flat bottom -> good FDM adhesion).  Cubes are spaced
-// out so the board is a full waffle: 3 mm partitions cradle every bottom cube,
-// with full-height slots in the walls for the horizontal necks that join a
-// piece.  Everything is meshed watertight via Surface Nets over an analytic SDF.
+// Generate binary STL files for the template and all pieces — no deps, no OpenSCAD.
+// Units are chamfered cubes (flat bottom -> good FDM adhesion), spaced equally in
+// all directions and joined by necks.  The "template" is the full 2x5x10 block of
+// joined cubes that all pieces together fill.  Meshed watertight via Surface Nets
+// over an analytic SDF.
 const fs = require('fs');
 const path = require('path');
 
@@ -10,12 +10,11 @@ const path = require('path');
 const ball_d=10;                             // cube side
 const cham=2.0;                              // chamfer cut on every cube edge (mm)
 const gap=0.3;                               // clearance around pieces (free passage)
-const wall_in=1.5;                           // internal partition thickness between cells
+const wall_in=1.5;                           // nominal partition between cells (sets the spacing)
 const pitch=ball_d+2*gap+wall_in;            // 12.1 — spacing (uniform in all directions)
 const vlayer=pitch;                          // vertical spacing == horizontal (cubes spaced everywhere)
 const neck_w=4;                              // neck cross-section joining a piece's cubes
-const wall=3, floor=3, push_d=5;             // outer wall, floor, push-out hole under each cell
-const VOX=0.7;    // voxel size for the board mesh
+const VOX=0.7;    // voxel size for the template mesh
 const VOXP=0.5;   // voxel size for the pieces (finer -> crisper chamfers)
 const ROWS=5, COLS=10;
 const half=ball_d/2, ACH=ball_d-cham;        // chamfer plane offset: |x|+|y| <= ACH
@@ -110,29 +109,27 @@ function pieceTris(balls){
   return meshSDF(sdf, X0-m,Y0-m,-m, X1+m,Y1+m,Z1+m, VOXP);
 }
 
-// ---- board: full waffle (square wells + neck slots + push holes) ----
-function boardTris(){
-  const z_b=floor+half, H=z_b+vlayer;             // bottom cube centre, board top
-  const edge=half+gap+wall, wh=half+gap, sh=neck_w/2+gap, pr=push_d/2;
-  const bx0=-edge, bx1=(COLS-1)*pitch+edge, by0=-(ROWS-1)*pitch-edge, by1=edge;
-  const bcx=(bx0+bx1)/2,bcy=(by0+by1)/2,hbx=(bx1-bx0)/2,hby=(by1-by0)/2;
-  function sdf(x,y,z){
-    const block=sBox(x,y,z,bcx,bcy,H/2,hbx,hby,H/2);
-    let cav=1e9; const ci=Math.round(x/pitch),ri=Math.round(-y/pitch);
-    for(let dc=-1;dc<=1;dc++)for(let dr=-1;dr<=1;dr++){ const c=ci+dc,r=ri+dr;
+// ---- template: the full 2 x 5 x 10 block of chamfered cubes joined by necks ----
+// (one solid "master" that all pieces together fill).  SDF localised to nearby
+// cells so it stays fast even with 100 cubes.
+function templateTris(){
+  const cen=(c,r,l)=>[c*pitch, -r*pitch, half + l*vlayer];
+  const sdf=(x,y,z)=>{
+    let d=1e9; const ci=Math.round(x/pitch), ri=Math.round(-y/pitch);
+    for(let c=ci-1;c<=ci+1;c++)for(let r=ri-1;r<=ri+1;r++){
       if(c<0||c>=COLS||r<0||r>=ROWS) continue;
-      const Cx=c*pitch, Cy=-r*pitch;
-      const seat=sCube(x,y,z,Cx,Cy,z_b)-gap;                                         // bevelled seat = cube contour
-      const shaft=sBox(x,y,z,Cx,Cy,(floor+cham+H+5)/2,wh,wh,(H+5-(floor+cham))/2);   // square shaft above (insertion)
-      cav=Math.min(cav, Math.min(seat,shaft));                                       // well = seat + shaft
-      if(push_d>0) cav=Math.min(cav, sCyl(x,y,z,Cx,Cy,-5,floor+1,pr));               // push hole
-      if(c<COLS-1) cav=Math.min(cav, sBox(x,y,z,Cx+pitch/2,Cy,(floor+H)/2,2,sh,(H-floor)/2));    // x neck slot
-      if(r<ROWS-1) cav=Math.min(cav, sBox(x,y,z,Cx,Cy-pitch/2,(floor+H)/2,sh,2,(H-floor)/2));    // y neck slot
+      for(let l=0;l<2;l++){ const A=cen(c,r,l);
+        d=Math.min(d, sCube(x,y,z,A[0],A[1],A[2]));
+        if(c+1<COLS) d=Math.min(d, sNeck(x,y,z,A,cen(c+1,r,l)));
+        if(r+1<ROWS) d=Math.min(d, sNeck(x,y,z,A,cen(c,r+1,l)));
+        if(l===0)    d=Math.min(d, sNeck(x,y,z,A,cen(c,r,1)));
+      }
     }
-    return Math.max(block,-cav);
-  }
+    return d;
+  };
   const m=2*VOX;
-  return meshSDF(sdf, bx0-m,by0-m,-m, bx1+m,by1+m,H+m, VOX);
+  return meshSDF(sdf, -half-m, -(ROWS-1)*pitch-half-m, -m,
+                      (COLS-1)*pitch+half+m, half+m, ball_d+vlayer+m, VOX);
 }
 
 function writeSTL(file,tris){
@@ -152,7 +149,7 @@ function writeSTL(file,tris){
 
 const out=path.join(__dirname,'stl'); fs.mkdirSync(out,{recursive:true});
 let total=0, report=[];
-report.push(['board', writeSTL(path.join(out,'board.stl'), boardTris())]);
+report.push(['template', writeSTL(path.join(out,'template.stl'), templateTris())]);
 for(const id in pieces) report.push(['piece_'+id, writeSTL(path.join(out,'piece_'+id+'.stl'), pieceTris(pieces[id]))]);
 for(const [n,t] of report){ total+=t; console.log(n.padEnd(10), t, 'tris'); }
 console.log('TOTAL', total, 'triangles');
