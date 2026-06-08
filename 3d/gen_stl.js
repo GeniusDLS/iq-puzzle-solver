@@ -1,17 +1,19 @@
 // Generate binary STL files for the board and all pieces — no deps, no OpenSCAD.
-// Units are chamfered cubes (truncated-edge cubes) instead of balls: a flat
-// bottom prints far better on an FDM printer than a sphere's point contact.
-// Everything is meshed with Surface Nets over an analytic SDF, so pieces come
-// out watertight (touching cubes fuse) and the board is a clean tray.
+// Units are chamfered cubes (flat bottom -> good FDM adhesion).  Cubes are spaced
+// out so the board is a full waffle: 3 mm partitions cradle every bottom cube,
+// with full-height slots in the walls for the horizontal necks that join a
+// piece.  Everything is meshed watertight via Surface Nets over an analytic SDF.
 const fs = require('fs');
 const path = require('path');
 
 // ---- params (keep in sync with iq_puzzle.scad) ----  cube side = 10 mm (1 cm)
-const ball_d=10, pitch=10, vlayer=10;       // cube side, grid spacing, layer height
+const ball_d=10, vlayer=10;                  // cube side, vertical layer step (cubes touch vertically)
 const cham=3.0;                              // chamfer cut on every cube edge (mm)
-// board = a tray hugging the full 5x10 x 2-layer footprint (gap clearance);
-// the upper layer protrudes half a cube for easy insert/remove.
-const gap=0.3, wall=3, floor=3, push_d=5;   // push_d: bottom push-out hole under each cell
+const gap=0.3;                               // clearance around pieces (free passage)
+const wall_in=3;                             // internal partition thickness between cells
+const pitch=ball_d+2*gap+wall_in;            // 13.6 — in-plane centre-to-centre spacing
+const neck_w=4;                              // neck cross-section joining a piece's cubes
+const wall=3, floor=3, push_d=5;             // outer wall, floor, push-out hole under each cell
 const VOX=0.7;    // voxel size for the board mesh
 const VOXP=0.5;   // voxel size for the pieces (finer -> crisper chamfers)
 const ROWS=5, COLS=10;
@@ -29,6 +31,7 @@ const pieces = {   // hinge model: two flat faces sharing an edge, folded 90deg
   I:[[0,0,0],[0,0,1],[0,1,0],[1,0,0],[2,0,0],[2,1,0]],
   J:[[0,0,0],[0,1,0],[1,0,0],[1,0,1],[1,1,0],[2,0,0]],
 };
+const gManhattan=(a,b)=>Math.abs(a[0]-b[0])+Math.abs(a[1]-b[1])+Math.abs(a[2]-b[2]);
 
 const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
 const norm=(v)=>{const L=Math.hypot(...v)||1;return [v[0]/L,v[1]/L,v[2]/L];};
@@ -45,6 +48,12 @@ const sCube=(px,py,pz,cx,cy,cz)=>{ const x=px-cx,y=py-cy,z=pz-cz;
   const d2=(Math.abs(y)+Math.abs(z)-ACH)/Math.SQRT2;
   const d3=(Math.abs(x)+Math.abs(z)-ACH)/Math.SQRT2;
   return Math.max(box,d1,d2,d3); };
+// neck bar between two cube centres a,b (square section neck_w, spanning centre-to-centre)
+const sNeck=(px,py,pz,a,b)=>{ const cx=(a[0]+b[0])/2,cy=(a[1]+b[1])/2,cz=(a[2]+b[2])/2;
+  const hx=a[0]!==b[0]?Math.abs(a[0]-b[0])/2:neck_w/2;
+  const hy=a[1]!==b[1]?Math.abs(a[1]-b[1])/2:neck_w/2;
+  const hz=a[2]!==b[2]?Math.abs(a[2]-b[2])/2:neck_w/2;
+  return sBox(px,py,pz,cx,cy,cz,hx,hy,hz); };
 
 // ---- generic Surface Nets mesher over an SDF ----
 function meshSDF(sdf, X0,Y0,Z0, X1,Y1,Z1, h){
@@ -85,37 +94,42 @@ function meshSDF(sdf, X0,Y0,Z0, X1,Y1,Z1, h){
   return tris;
 }
 
-// ---- piece: union (min) of chamfered cubes, dropped so the bottom sits at z=0 ----
+// ---- piece: chamfered cubes joined by neck bars, bottom sitting at z=0 ----
 function pieceTris(balls){
-  const cen=balls.map(b=>[b[0]*pitch, -b[1]*pitch, half + b[2]*vlayer]);
-  const sdf=(x,y,z)=>{ let d=1e9; for(const c of cen) d=Math.min(d, sCube(x,y,z,c[0],c[1],c[2])); return d; };
+  const C=balls.map(b=>[b[0]*pitch, -b[1]*pitch, half + b[2]*vlayer]);
+  const pairs=[];
+  for(let i=0;i<balls.length;i++)for(let j=i+1;j<balls.length;j++)
+    if(gManhattan(balls[i],balls[j])===1) pairs.push([C[i],C[j]]);
+  const sdf=(x,y,z)=>{ let d=1e9; for(const c of C) d=Math.min(d, sCube(x,y,z,c[0],c[1],c[2]));
+    for(const p of pairs) d=Math.min(d, sNeck(x,y,z,p[0],p[1])); return d; };
   let X0=1e9,Y0=1e9,X1=-1e9,Y1=-1e9, Z1=-1e9;
-  for(const c of cen){ X0=Math.min(X0,c[0]-half); X1=Math.max(X1,c[0]+half);
+  for(const c of C){ X0=Math.min(X0,c[0]-half); X1=Math.max(X1,c[0]+half);
     Y0=Math.min(Y0,c[1]-half); Y1=Math.max(Y1,c[1]+half); Z1=Math.max(Z1,c[2]+half); }
   const m=2*VOXP;
   return meshSDF(sdf, X0-m,Y0-m,-m, X1+m,Y1+m,Z1+m, VOXP);
 }
 
-// ---- board: a tray hugging the footprint, open top, push holes in the floor ----
+// ---- board: full waffle (square wells + neck slots + push holes) ----
 function boardTris(){
-  const z_b=floor+half, Htop=z_b+vlayer;          // bottom cube centre, board top
-  const edge=half+gap+wall, ph=half+gap, pr=push_d/2;
+  const z_b=floor+half, H=z_b+vlayer;             // bottom cube centre, board top
+  const edge=half+gap+wall, wh=half+gap, sh=neck_w/2+gap, pr=push_d/2;
   const bx0=-edge, bx1=(COLS-1)*pitch+edge, by0=-(ROWS-1)*pitch-edge, by1=edge;
-  const px0=-ph, px1=(COLS-1)*pitch+ph, py0=-(ROWS-1)*pitch-ph, py1=ph;
   const bcx=(bx0+bx1)/2,bcy=(by0+by1)/2,hbx=(bx1-bx0)/2,hby=(by1-by0)/2;
-  const pcx=(px0+px1)/2,pcy=(py0+py1)/2,hpx=(px1-px0)/2,hpy=(py1-py0)/2;
   function sdf(x,y,z){
-    const block=sBox(x,y,z,bcx,bcy,Htop/2,hbx,hby,Htop/2);
-    const pocket=sBox(x,y,z,pcx,pcy,(floor+Htop+5)/2,hpx,hpy,(Htop+5-floor)/2);
-    let v=Math.max(block,-pocket);
-    if(push_d>0){ const ci=Math.round(x/pitch),ri=Math.round(-y/pitch);
-      for(let dc=-1;dc<=1;dc++)for(let dr=-1;dr<=1;dr++){ const c=ci+dc,r=ri+dr;
-        if(c<0||c>=COLS||r<0||r>=ROWS) continue;
-        v=Math.max(v, -sCyl(x,y,z,c*pitch,-r*pitch,-5,floor+1,pr)); } }
-    return v;
+    const block=sBox(x,y,z,bcx,bcy,H/2,hbx,hby,H/2);
+    let cav=1e9; const ci=Math.round(x/pitch),ri=Math.round(-y/pitch);
+    for(let dc=-1;dc<=1;dc++)for(let dr=-1;dr<=1;dr++){ const c=ci+dc,r=ri+dr;
+      if(c<0||c>=COLS||r<0||r>=ROWS) continue;
+      const Cx=c*pitch, Cy=-r*pitch;
+      cav=Math.min(cav, sBox(x,y,z,Cx,Cy,(floor+H+5)/2,wh,wh,(H+5-floor)/2));        // well
+      if(push_d>0) cav=Math.min(cav, sCyl(x,y,z,Cx,Cy,-5,floor+1,pr));               // push hole
+      if(c<COLS-1) cav=Math.min(cav, sBox(x,y,z,Cx+pitch/2,Cy,(floor+H)/2,2,sh,(H-floor)/2));    // x neck slot
+      if(r<ROWS-1) cav=Math.min(cav, sBox(x,y,z,Cx,Cy-pitch/2,(floor+H)/2,sh,2,(H-floor)/2));    // y neck slot
+    }
+    return Math.max(block,-cav);
   }
   const m=2*VOX;
-  return meshSDF(sdf, bx0-m,by0-m,-m, bx1+m,by1+m,Htop+m, VOX);
+  return meshSDF(sdf, bx0-m,by0-m,-m, bx1+m,by1+m,H+m, VOX);
 }
 
 function writeSTL(file,tris){
